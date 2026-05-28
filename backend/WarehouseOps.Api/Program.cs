@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using WarehouseOps.Application.Interfaces;
+using WarehouseOps.Application.Services;
 using WarehouseOps.Infrastructure;
+using WarehouseOps.Infrastructure.Repositories;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -12,6 +15,10 @@ builder.Services.AddSwaggerGen();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(
         builder.Configuration.GetConnectionString("DefaultConnection")));
+
+builder.Services.AddScoped<IProductService, ProductService>();
+
+builder.Services.AddScoped<IProductRepository, ProductRepository>();
 
 var app = builder.Build();
 
