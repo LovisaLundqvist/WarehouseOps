@@ -25,4 +25,21 @@ public class ApplicationDbContext : DbContext
     public DbSet<Incident> Incidents => Set<Incident>();
 
     public DbSet<AuditLog> AuditLogs => Set<AuditLog>();
+
+    protected override void OnModelCreating(ModelBuilder modelBuilder)
+    {
+        base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<Product>()
+            .Property(product => product.Price)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Order>()
+            .Property(order => order.TotalAmount)
+            .HasPrecision(18, 2);
+
+        modelBuilder.Entity<OrderItem>()
+            .Property(orderItem => orderItem.UnitPrice)
+            .HasPrecision(18, 2);
+    }
 }
