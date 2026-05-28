@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using WarehouseOps.Application.Interfaces;
 using WarehouseOps.Application.Services;
 using WarehouseOps.Infrastructure;
@@ -19,6 +19,10 @@ builder.Services.AddDbContext<ApplicationDbContext>(options =>
 builder.Services.AddScoped<IProductService, ProductService>();
 
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
+
+builder.Services.AddScoped<IInventoryService, InventoryService>();
+
+builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 
 var app = builder.Build();
 
