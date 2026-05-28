@@ -1,0 +1,23 @@
+{
+  "runtimeTarget": {
+    "name": ".NETCoreApp,Version=v10.0",
+    "signature": ""
+  },
+  "compilationOptions": {},
+  "targets": {
+    ".NETCoreApp,Version=v10.0": {
+      "WarehouseOps.Infrastructure/1.0.0": {
+        "runtime": {
+          "WarehouseOps.Infrastructure.dll": {}
+        }
+      }
+    }
+  },
+  "libraries": {
+    "WarehouseOps.Infrastructure/1.0.0": {
+      "type": "project",
+      "serviceable": false,
+      "sha512": ""
+    }
+  }
+}

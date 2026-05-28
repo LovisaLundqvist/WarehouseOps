@@ -1,0 +1,12 @@
+C:\Users\Elsar\WarehouseOps\backend\WarehouseOps.Domain\bin\Debug\net10.0\WarehouseOps.Domain.deps.json
+C:\Users\Elsar\WarehouseOps\backend\WarehouseOps.Domain\bin\Debug\net10.0\WarehouseOps.Domain.dll
+C:\Users\Elsar\WarehouseOps\backend\WarehouseOps.Domain\bin\Debug\net10.0\WarehouseOps.Domain.pdb
+C:\Users\Elsar\WarehouseOps\backend\WarehouseOps.Domain\obj\Debug\net10.0\WarehouseOps.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\Elsar\WarehouseOps\backend\WarehouseOps.Domain\obj\Debug\net10.0\WarehouseOps.Domain.AssemblyInfoInputs.cache
+C:\Users\Elsar\WarehouseOps\backend\WarehouseOps.Domain\obj\Debug\net10.0\WarehouseOps.Domain.AssemblyInfo.cs
+C:\Users\Elsar\WarehouseOps\backend\WarehouseOps.Domain\obj\Debug\net10.0\WarehouseOps.Domain.csproj.CoreCompileInputs.cache
+C:\Users\Elsar\WarehouseOps\backend\WarehouseOps.Domain\obj\Debug\net10.0\WarehouseOps.Domain.sourcelink.json
+C:\Users\Elsar\WarehouseOps\backend\WarehouseOps.Domain\obj\Debug\net10.0\WarehouseOps.Domain.dll
+C:\Users\Elsar\WarehouseOps\backend\WarehouseOps.Domain\obj\Debug\net10.0\refint\WarehouseOps.Domain.dll
+C:\Users\Elsar\WarehouseOps\backend\WarehouseOps.Domain\obj\Debug\net10.0\WarehouseOps.Domain.pdb
+C:\Users\Elsar\WarehouseOps\backend\WarehouseOps.Domain\obj\Debug\net10.0\ref\WarehouseOps.Domain.dll
