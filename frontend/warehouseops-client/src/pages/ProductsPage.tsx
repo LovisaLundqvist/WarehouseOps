@@ -1,10 +1,19 @@
 ﻿import { type FormEvent, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Package, Pencil, Plus, Search, SlidersHorizontal, X } from "lucide-react";
+import {
+  AlertTriangle,
+  Package,
+  Pencil,
+  Plus,
+  Search,
+  SlidersHorizontal,
+  Trash2,
+  X,
+} from "lucide-react";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import { z } from "zod";
-import { createProduct, getProducts, updateProduct } from "../api/productsApi";
+import { createProduct, deleteProduct, getProducts, updateProduct } from "../api/productsApi";
 import type {
   CreateProductRequest,
   Product,
@@ -52,6 +61,7 @@ export default function ProductsPage() {
   const [successMessage, setSuccessMessage] = useState("");
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
   const [editingProductName, setEditingProductName] = useState("");
+  const [productToDelete, setProductToDelete] = useState<Product | null>(null);
 
   const isEditing = editingProductId !== null;
 
@@ -96,6 +106,22 @@ export default function ProductsPage() {
     },
   });
 
+  const deleteProductMutation = useMutation({
+    mutationFn: deleteProduct,
+    onSuccess: (_data, deletedProductId) => {
+      setSuccessMessage("Product was deleted.");
+      setProductToDelete(null);
+
+      if (editingProductId === deletedProductId) {
+        setEditingProductId(null);
+        setEditingProductName("");
+        reset(initialProductFormValues);
+      }
+
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+
   function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -117,8 +143,10 @@ export default function ProductsPage() {
 
   function handleStartEdit(product: Product) {
     setSuccessMessage("");
+    setProductToDelete(null);
     createProductMutation.reset();
     updateProductMutation.reset();
+    deleteProductMutation.reset();
 
     setEditingProductId(product.id);
     setEditingProductName(product.name);
@@ -144,10 +172,33 @@ export default function ProductsPage() {
     reset(initialProductFormValues);
   }
 
+  function handleRequestDelete(product: Product) {
+    setSuccessMessage("");
+    createProductMutation.reset();
+    updateProductMutation.reset();
+    deleteProductMutation.reset();
+
+    setProductToDelete(product);
+  }
+
+  function handleCancelDelete() {
+    setProductToDelete(null);
+    deleteProductMutation.reset();
+  }
+
+  function handleConfirmDelete() {
+    if (!productToDelete) {
+      return;
+    }
+
+    deleteProductMutation.mutate(productToDelete.id);
+  }
+
   const handleSaveProduct: SubmitHandler<ProductFormValues> = (values) => {
     setSuccessMessage("");
     createProductMutation.reset();
     updateProductMutation.reset();
+    deleteProductMutation.reset();
 
     const request: CreateProductRequest | UpdateProductRequest = {
       name: values.name.trim(),
@@ -170,9 +221,15 @@ export default function ProductsPage() {
   };
 
   const listErrorMessage = getApiErrorMessage(error, "Could not load products.");
+
   const saveErrorMessage = getApiErrorMessage(
     isEditing ? updateProductMutation.error : createProductMutation.error,
     isEditing ? "Could not update product." : "Could not create product.",
+  );
+
+  const deleteErrorMessage = getApiErrorMessage(
+    deleteProductMutation.error,
+    "Could not delete product.",
   );
 
   const isSaving = createProductMutation.isPending || updateProductMutation.isPending;
@@ -194,7 +251,7 @@ export default function ProductsPage() {
           </div>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500">
-            Create, update and view warehouse products. Search by name or SKU and filter by category.
+            Create, update, delete and view warehouse products. Search by name or SKU and filter by category.
           </p>
         </div>
 
@@ -320,6 +377,53 @@ export default function ProductsPage() {
           </div>
         </form>
       </section>
+
+      {productToDelete && (
+        <section className="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm">
+          <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+            <div className="flex gap-3">
+              <div className="mt-1 rounded-xl bg-red-100 p-3 text-red-700">
+                <AlertTriangle size={22} />
+              </div>
+
+              <div>
+                <h3 className="text-base font-semibold text-red-950">Confirm delete</h3>
+                <p className="mt-1 text-sm leading-6 text-red-800">
+                  You are about to delete <span className="font-semibold">{productToDelete.name}</span> with SKU{" "}
+                  <span className="font-semibold">{productToDelete.sku}</span>. This action should only be used when
+                  the product is no longer needed.
+                </p>
+
+                {deleteProductMutation.isError && (
+                  <p className="mt-3 rounded-xl border border-red-200 bg-white p-3 text-sm text-red-700">
+                    {deleteErrorMessage}
+                  </p>
+                )}
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                type="button"
+                onClick={handleCancelDelete}
+                disabled={deleteProductMutation.isPending}
+                className="rounded-xl border border-red-200 bg-white px-4 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                Cancel
+              </button>
+
+              <button
+                type="button"
+                onClick={handleConfirmDelete}
+                disabled={deleteProductMutation.isPending}
+                className="rounded-xl bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+              >
+                {deleteProductMutation.isPending ? "Deleting..." : "Delete product"}
+              </button>
+            </div>
+          </div>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <form onSubmit={handleFilterSubmit} className="grid gap-4 lg:grid-cols-[1fr_1fr_auto_auto]">
@@ -457,14 +561,25 @@ export default function ProductsPage() {
                     </td>
 
                     <td className="whitespace-nowrap px-5 py-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleStartEdit(product)}
-                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                      >
-                        <Pencil size={15} />
-                        Edit
-                      </button>
+                      <div className="flex justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleStartEdit(product)}
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                        >
+                          <Pencil size={15} />
+                          Edit
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => handleRequestDelete(product)}
+                          className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50"
+                        >
+                          <Trash2 size={15} />
+                          Delete
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
