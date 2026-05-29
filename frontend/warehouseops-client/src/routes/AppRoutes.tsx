@@ -1,6 +1,7 @@
 ﻿import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "../layouts/AppLayout";
 import DashboardPage from "../pages/DashboardPage";
+import InventoryPage from "../pages/InventoryPage";
 import PlaceholderPage from "../pages/PlaceholderPage";
 import ProductsPage from "../pages/ProductsPage";
 
@@ -10,7 +11,7 @@ export default function AppRoutes() {
       <Route element={<AppLayout />}>
         <Route index element={<DashboardPage />} />
         <Route path="products" element={<ProductsPage />} />
-        <Route path="inventory" element={<PlaceholderPage title="Inventory" description="Inventory overview and low-stock handling will be implemented in the next frontend step." />} />
+        <Route path="inventory" element={<InventoryPage />} />
         <Route path="customers" element={<PlaceholderPage title="Customers" description="Customer management will be implemented after the core layout is working." />} />
         <Route path="orders" element={<PlaceholderPage title="Orders" description="Order list, order details and status handling will be implemented in the next frontend step." />} />
         <Route path="shipments" element={<PlaceholderPage title="Shipments" description="Shipment tracking and status handling will be implemented in the next frontend step." />} />
