@@ -1,3 +1,8 @@
-bin/
+﻿bin/
 obj/
 .vs/
+
+# Frontend
+frontend/warehouseops-client/node_modules/
+frontend/warehouseops-client/dist/
+frontend/warehouseops-client/.vite/
