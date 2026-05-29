@@ -24,6 +24,10 @@ builder.Services.AddScoped<IInventoryService, InventoryService>();
 
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 
+builder.Services.AddScoped<ICustomerService, CustomerService>();
+
+builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
