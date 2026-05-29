@@ -34,6 +34,9 @@ builder.Services.AddScoped<IShipmentRepository, ShipmentRepository>();
 builder.Services.AddScoped<IIncidentService, IncidentService>();
 builder.Services.AddScoped<IIncidentRepository, IncidentRepository>();
 
+builder.Services.AddScoped<IAuditLogService, AuditLogService>();
+builder.Services.AddScoped<IAuditLogRepository, AuditLogRepository>();
+
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())

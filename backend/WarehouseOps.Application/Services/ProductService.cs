@@ -1,4 +1,4 @@
-using WarehouseOps.Application.Dtos;
+﻿using WarehouseOps.Application.Dtos;
 using WarehouseOps.Application.Interfaces;
 using WarehouseOps.Domain;
 
@@ -7,10 +7,12 @@ namespace WarehouseOps.Application.Services;
 public class ProductService : IProductService
 {
     private readonly IProductRepository _productRepository;
+    private readonly IAuditLogService _auditLogService;
 
-    public ProductService(IProductRepository productRepository)
+    public ProductService(IProductRepository productRepository, IAuditLogService auditLogService)
     {
         _productRepository = productRepository;
+        _auditLogService = auditLogService;
     }
 
     public async Task<List<ProductDto>> GetAllAsync(string? search, string? category)
@@ -60,6 +62,12 @@ public class ProductService : IProductService
 
         await _productRepository.SaveChangesAsync();
 
+        await _auditLogService.LogAsync(
+            "Product",
+            "Created",
+            "System",
+            $"Created product {product.Name} with SKU {product.Sku}.");
+
         return MapToDto(product);
     }
 
@@ -81,6 +89,11 @@ public class ProductService : IProductService
             throw new InvalidOperationException("A product with this SKU already exists.");
         }
 
+        var oldName = product.Name;
+        var oldSku = product.Sku;
+        var oldCategory = product.Category;
+        var oldPrice = product.Price;
+
         product.Name = request.Name.Trim();
         product.Sku = request.Sku.Trim();
         product.Category = request.Category.Trim();
@@ -89,6 +102,12 @@ public class ProductService : IProductService
         product.UpdatedAt = DateTime.UtcNow;
 
         await _productRepository.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            "Product",
+            "Updated",
+            "System",
+            $"Updated product {product.Id}. Old values: Name={oldName}, SKU={oldSku}, Category={oldCategory}, Price={oldPrice}. New values: Name={product.Name}, SKU={product.Sku}, Category={product.Category}, Price={product.Price}.");
 
         return MapToDto(product);
     }
@@ -102,9 +121,18 @@ public class ProductService : IProductService
             return false;
         }
 
+        var productName = product.Name;
+        var productSku = product.Sku;
+
         _productRepository.Delete(product);
 
         await _productRepository.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            "Product",
+            "Deleted",
+            "System",
+            $"Deleted product {productName} with SKU {productSku}.");
 
         return true;
     }
