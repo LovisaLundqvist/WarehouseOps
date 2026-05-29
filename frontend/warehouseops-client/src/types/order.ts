@@ -17,3 +17,7 @@ export type Order = {
   createdAt: string;
   updatedAt: string | null;
 };
+
+export type UpdateOrderStatusRequest = {
+  status: string;
+};

@@ -1,14 +1,17 @@
 ﻿import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  AlertTriangle,
   ChevronDown,
   ChevronUp,
   ClipboardList,
   Package,
   ReceiptText,
+  Settings,
   User,
+  X,
 } from "lucide-react";
-import { getOrders } from "../api/ordersApi";
+import { cancelOrder, getOrders, updateOrderStatus } from "../api/ordersApi";
 import type { Order } from "../types/order";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
@@ -16,6 +19,15 @@ const currencyFormatter = new Intl.NumberFormat("sv-SE", {
   style: "currency",
   currency: "SEK",
 });
+
+const orderStatuses = [
+  "Pending",
+  "Processing",
+  "Packed",
+  "Shipped",
+  "Completed",
+  "Cancelled",
+];
 
 function getStatusBadgeClass(status: string) {
   switch (status) {
@@ -42,8 +54,17 @@ function getActiveOrdersCount(orders: Order[]) {
   ).length;
 }
 
+function canCancelOrder(order: Order) {
+  return order.status !== "Shipped" && order.status !== "Completed" && order.status !== "Cancelled";
+}
+
 export default function OrdersPage() {
+  const queryClient = useQueryClient();
+
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
+  const [selectedStatus, setSelectedStatus] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
 
   const {
     data: orders = [],
@@ -55,14 +76,98 @@ export default function OrdersPage() {
     queryFn: getOrders,
   });
 
+  const updateStatusMutation = useMutation({
+    mutationFn: (data: { id: string; status: string }) =>
+      updateOrderStatus(data.id, { status: data.status }),
+    onSuccess: (updatedOrder) => {
+      setSuccessMessage(`Order status was updated to ${updatedOrder.status}.`);
+      setSelectedOrder(updatedOrder);
+      setSelectedStatus(updatedOrder.status);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
+
+  const cancelOrderMutation = useMutation({
+    mutationFn: cancelOrder,
+    onSuccess: (cancelledOrder) => {
+      setSuccessMessage("Order was cancelled.");
+      setSelectedOrder(cancelledOrder);
+      setSelectedStatus(cancelledOrder.status);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
+  });
+
   const activeOrdersCount = getActiveOrdersCount(orders);
   const completedOrdersCount = orders.filter((order) => order.status === "Completed").length;
   const totalOrderValue = orders.reduce((sum, order) => sum + order.totalAmount, 0);
 
   const errorMessage = getApiErrorMessage(error, "Could not load orders.");
 
+  const actionErrorMessage = getApiErrorMessage(
+    updateStatusMutation.error ?? cancelOrderMutation.error,
+    "Could not update order.",
+  );
+
+  const hasActionError = updateStatusMutation.isError || cancelOrderMutation.isError;
+  const isActionPending = updateStatusMutation.isPending || cancelOrderMutation.isPending;
+
   function toggleOrderDetails(orderId: string) {
     setExpandedOrderId((current) => (current === orderId ? null : orderId));
+  }
+
+  function handleSelectOrder(order: Order) {
+    setSuccessMessage("");
+    updateStatusMutation.reset();
+    cancelOrderMutation.reset();
+
+    setSelectedOrder(order);
+    setSelectedStatus(order.status);
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleClearSelectedOrder() {
+    setSuccessMessage("");
+    updateStatusMutation.reset();
+    cancelOrderMutation.reset();
+
+    setSelectedOrder(null);
+    setSelectedStatus("");
+  }
+
+  function handleUpdateStatus() {
+    if (!selectedOrder || !selectedStatus) {
+      return;
+    }
+
+    setSuccessMessage("");
+    updateStatusMutation.reset();
+    cancelOrderMutation.reset();
+
+    updateStatusMutation.mutate({
+      id: selectedOrder.id,
+      status: selectedStatus,
+    });
+  }
+
+  function handleCancelOrder() {
+    if (!selectedOrder) {
+      return;
+    }
+
+    const confirmed = window.confirm(
+      `Are you sure you want to cancel order ${selectedOrder.id}?`,
+    );
+
+    if (!confirmed) {
+      return;
+    }
+
+    setSuccessMessage("");
+    updateStatusMutation.reset();
+    cancelOrderMutation.reset();
+
+    cancelOrderMutation.mutate(selectedOrder.id);
   }
 
   return (
@@ -81,7 +186,7 @@ export default function OrdersPage() {
           </div>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500">
-            View customer orders, order status, total value and order lines from the backend API.
+            View customer orders, inspect order lines, update order status and cancel orders when business rules allow it.
           </p>
         </div>
 
@@ -113,7 +218,7 @@ export default function OrdersPage() {
             <div>
               <h3 className="text-base font-semibold text-slate-950">Order summary</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Read-only overview. Status changes and cancel actions will be added after the list is stable.
+                Status transitions are validated by the ASP.NET Core backend.
               </p>
             </div>
           </div>
@@ -125,6 +230,107 @@ export default function OrdersPage() {
             </p>
           </div>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
+              <Settings size={20} />
+            </div>
+
+            <div>
+              <h3 className="text-base font-semibold text-slate-950">Order actions</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                {selectedOrder
+                  ? `Managing order ${selectedOrder.id} for ${selectedOrder.customerName}.`
+                  : "Select an order from the table to update status or cancel it."}
+              </p>
+            </div>
+          </div>
+
+          {selectedOrder && (
+            <button
+              type="button"
+              onClick={handleClearSelectedOrder}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <X size={16} />
+              Clear
+            </button>
+          )}
+        </div>
+
+        {selectedOrder ? (
+          <div className="grid gap-4 lg:grid-cols-[1fr_auto_auto]">
+            <div>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Order status</span>
+                <select
+                  value={selectedStatus}
+                  onChange={(event) => setSelectedStatus(event.target.value)}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+                  {orderStatuses.map((status) => (
+                    <option key={status} value={status}>
+                      {status}
+                    </option>
+                  ))}
+                </select>
+              </label>
+
+              <p className="mt-2 text-sm text-slate-500">
+                Current status:{" "}
+                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(selectedOrder.status)}`}>
+                  {selectedOrder.status}
+                </span>
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={handleUpdateStatus}
+              disabled={isActionPending || selectedStatus === selectedOrder.status}
+              className="self-end rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+            >
+              {updateStatusMutation.isPending ? "Updating..." : "Update status"}
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCancelOrder}
+              disabled={isActionPending || !canCancelOrder(selectedOrder)}
+              className="self-end rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+            >
+              {cancelOrderMutation.isPending ? "Cancelling..." : "Cancel order"}
+            </button>
+
+            {successMessage && (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 lg:col-span-3">
+                {successMessage}
+              </div>
+            )}
+
+            {hasActionError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-3">
+                <div className="flex gap-2">
+                  <AlertTriangle size={18} />
+                  <span>{actionErrorMessage}</span>
+                </div>
+              </div>
+            )}
+
+            {!canCancelOrder(selectedOrder) && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 lg:col-span-3">
+                This order cannot be cancelled because it is already shipped, completed or cancelled.
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
+            No order selected.
+          </div>
+        )}
       </section>
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
@@ -174,7 +380,7 @@ export default function OrdersPage() {
                     Created
                   </th>
                   <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Details
+                    Actions
                   </th>
                 </tr>
               </thead>
@@ -186,7 +392,7 @@ export default function OrdersPage() {
                   return (
                     <tr key={order.id} className="align-top">
                       <td colSpan={6} className="p-0">
-                        <div className="grid grid-cols-1 border-b border-slate-100 lg:grid-cols-[1.6fr_1fr_0.7fr_1fr_1fr_0.8fr]">
+                        <div className="grid grid-cols-1 border-b border-slate-100 lg:grid-cols-[1.6fr_1fr_0.7fr_1fr_1fr_1.1fr]">
                           <div className="px-5 py-4">
                             <div className="flex items-start gap-3">
                               <div className="rounded-xl bg-slate-50 p-2 text-slate-600">
@@ -224,7 +430,16 @@ export default function OrdersPage() {
                             {new Date(order.createdAt).toLocaleDateString("sv-SE")}
                           </div>
 
-                          <div className="px-5 py-4 text-right">
+                          <div className="flex justify-end gap-2 px-5 py-4">
+                            <button
+                              type="button"
+                              onClick={() => handleSelectOrder(order)}
+                              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                            >
+                              <Settings size={15} />
+                              Manage
+                            </button>
+
                             <button
                               type="button"
                               onClick={() => toggleOrderDetails(order.id)}
@@ -302,3 +517,4 @@ export default function OrdersPage() {
     </div>
   );
 }
+
