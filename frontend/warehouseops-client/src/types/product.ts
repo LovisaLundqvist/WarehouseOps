@@ -21,3 +21,11 @@ export type CreateProductRequest = {
   description: string;
   price: number;
 };
+
+export type UpdateProductRequest = {
+  name: string;
+  sku: string;
+  category: string;
+  description: string;
+  price: number;
+};

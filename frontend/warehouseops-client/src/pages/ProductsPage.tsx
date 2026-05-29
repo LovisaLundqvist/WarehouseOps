@@ -1,11 +1,16 @@
 ﻿import { type FormEvent, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Package, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { Package, Pencil, Plus, Search, SlidersHorizontal, X } from "lucide-react";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import { z } from "zod";
-import { createProduct, getProducts } from "../api/productsApi";
-import type { CreateProductRequest, ProductFilters } from "../types/product";
+import { createProduct, getProducts, updateProduct } from "../api/productsApi";
+import type {
+  CreateProductRequest,
+  Product,
+  ProductFilters,
+  UpdateProductRequest,
+} from "../types/product";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
 const currencyFormatter = new Intl.NumberFormat("sv-SE", {
@@ -45,6 +50,10 @@ export default function ProductsPage() {
   });
 
   const [successMessage, setSuccessMessage] = useState("");
+  const [editingProductId, setEditingProductId] = useState<string | null>(null);
+  const [editingProductName, setEditingProductName] = useState("");
+
+  const isEditing = editingProductId !== null;
 
   const {
     register,
@@ -75,6 +84,18 @@ export default function ProductsPage() {
     },
   });
 
+  const updateProductMutation = useMutation({
+    mutationFn: (data: { id: string; request: UpdateProductRequest }) =>
+      updateProduct(data.id, data.request),
+    onSuccess: () => {
+      setSuccessMessage("Product was updated.");
+      setEditingProductId(null);
+      setEditingProductName("");
+      reset(initialProductFormValues);
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+
   function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -94,10 +115,41 @@ export default function ProductsPage() {
     setFilters(emptyFilters);
   }
 
-  const handleCreateProduct: SubmitHandler<ProductFormValues> = (values) => {
+  function handleStartEdit(product: Product) {
     setSuccessMessage("");
+    createProductMutation.reset();
+    updateProductMutation.reset();
 
-    const request: CreateProductRequest = {
+    setEditingProductId(product.id);
+    setEditingProductName(product.name);
+
+    reset({
+      name: product.name,
+      sku: product.sku,
+      category: product.category,
+      description: product.description ?? "",
+      price: product.price,
+    });
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleCancelEdit() {
+    setSuccessMessage("");
+    createProductMutation.reset();
+    updateProductMutation.reset();
+
+    setEditingProductId(null);
+    setEditingProductName("");
+    reset(initialProductFormValues);
+  }
+
+  const handleSaveProduct: SubmitHandler<ProductFormValues> = (values) => {
+    setSuccessMessage("");
+    createProductMutation.reset();
+    updateProductMutation.reset();
+
+    const request: CreateProductRequest | UpdateProductRequest = {
       name: values.name.trim(),
       sku: values.sku.trim(),
       category: values.category.trim(),
@@ -105,14 +157,26 @@ export default function ProductsPage() {
       price: values.price,
     };
 
+    if (editingProductId) {
+      updateProductMutation.mutate({
+        id: editingProductId,
+        request,
+      });
+
+      return;
+    }
+
     createProductMutation.mutate(request);
   };
 
   const listErrorMessage = getApiErrorMessage(error, "Could not load products.");
-  const createErrorMessage = getApiErrorMessage(
-    createProductMutation.error,
-    "Could not create product.",
+  const saveErrorMessage = getApiErrorMessage(
+    isEditing ? updateProductMutation.error : createProductMutation.error,
+    isEditing ? "Could not update product." : "Could not create product.",
   );
+
+  const isSaving = createProductMutation.isPending || updateProductMutation.isPending;
+  const hasSaveError = createProductMutation.isError || updateProductMutation.isError;
 
   return (
     <div className="space-y-6">
@@ -130,7 +194,7 @@ export default function ProductsPage() {
           </div>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500">
-            Create products, view warehouse products, search by name or SKU and filter by category.
+            Create, update and view warehouse products. Search by name or SKU and filter by category.
           </p>
         </div>
 
@@ -141,20 +205,37 @@ export default function ProductsPage() {
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-5 flex items-center gap-3">
-          <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
-            <Plus size={20} />
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
+              {isEditing ? <Pencil size={20} /> : <Plus size={20} />}
+            </div>
+
+            <div>
+              <h3 className="text-base font-semibold text-slate-950">
+                {isEditing ? "Update product" : "Create product"}
+              </h3>
+              <p className="mt-1 text-sm text-slate-500">
+                {isEditing
+                  ? `Editing ${editingProductName}. Save changes or cancel editing.`
+                  : "Add a new product to the warehouse catalog."}
+              </p>
+            </div>
           </div>
 
-          <div>
-            <h3 className="text-base font-semibold text-slate-950">Create product</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Add a new product to the warehouse catalog.
-            </p>
-          </div>
+          {isEditing && (
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <X size={16} />
+              Cancel edit
+            </button>
+          )}
         </div>
 
-        <form onSubmit={handleSubmit(handleCreateProduct)} className="grid gap-4 lg:grid-cols-2">
+        <form onSubmit={handleSubmit(handleSaveProduct)} className="grid gap-4 lg:grid-cols-2">
           <label className="block">
             <span className="text-sm font-medium text-slate-700">Name</span>
             <input
@@ -216,19 +297,25 @@ export default function ProductsPage() {
             </div>
           )}
 
-          {createProductMutation.isError && (
+          {hasSaveError && (
             <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-2">
-              {createErrorMessage}
+              {saveErrorMessage}
             </div>
           )}
 
           <div className="flex justify-end lg:col-span-2">
             <button
               type="submit"
-              disabled={createProductMutation.isPending}
+              disabled={isSaving}
               className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
             >
-              {createProductMutation.isPending ? "Creating..." : "Create product"}
+              {isSaving
+                ? isEditing
+                  ? "Updating..."
+                  : "Creating..."
+                : isEditing
+                  ? "Update product"
+                  : "Create product"}
             </button>
           </div>
         </form>
@@ -335,6 +422,9 @@ export default function ProductsPage() {
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Created
                   </th>
+                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Actions
+                  </th>
                 </tr>
               </thead>
 
@@ -364,6 +454,17 @@ export default function ProductsPage() {
 
                     <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-500">
                       {new Date(product.createdAt).toLocaleDateString("sv-SE")}
+                    </td>
+
+                    <td className="whitespace-nowrap px-5 py-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleStartEdit(product)}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                      >
+                        <Pencil size={15} />
+                        Edit
+                      </button>
                     </td>
                   </tr>
                 ))}

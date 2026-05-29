@@ -1,5 +1,10 @@
 ﻿import apiClient from "./apiClient";
-import type { CreateProductRequest, Product, ProductFilters } from "../types/product";
+import type {
+  CreateProductRequest,
+  Product,
+  ProductFilters,
+  UpdateProductRequest,
+} from "../types/product";
 
 export async function getProducts(filters: ProductFilters = {}): Promise<Product[]> {
   const params = new URLSearchParams();
@@ -19,6 +24,15 @@ export async function getProducts(filters: ProductFilters = {}): Promise<Product
 
 export async function createProduct(request: CreateProductRequest): Promise<Product> {
   const response = await apiClient.post<Product>("/Products", request);
+
+  return response.data;
+}
+
+export async function updateProduct(
+  id: string,
+  request: UpdateProductRequest,
+): Promise<Product> {
+  const response = await apiClient.put<Product>(`/Products/${id}`, request);
 
   return response.data;
 }
