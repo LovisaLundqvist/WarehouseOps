@@ -9,3 +9,8 @@
   createdAt: string;
   updatedAt: string | null;
 };
+
+export type UpdateInventoryItemRequest = {
+  quantityInStock: number;
+  minimumStockLevel: number;
+};

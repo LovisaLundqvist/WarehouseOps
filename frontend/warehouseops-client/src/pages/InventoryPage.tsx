@@ -1,11 +1,59 @@
 ﻿import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { AlertTriangle, Boxes, CheckCircle2, PackageSearch } from "lucide-react";
-import { getInventoryItems, getLowStockInventoryItems } from "../api/inventoryApi";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  AlertTriangle,
+  Boxes,
+  CheckCircle2,
+  PackageSearch,
+  Pencil,
+  Save,
+  X,
+} from "lucide-react";
+import { type SubmitHandler, useForm } from "react-hook-form";
+import { z } from "zod";
+import {
+  getInventoryItems,
+  getLowStockInventoryItems,
+  updateInventoryItem,
+} from "../api/inventoryApi";
+import type { InventoryItem, UpdateInventoryItemRequest } from "../types/inventory";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
+const inventorySchema = z.object({
+  quantityInStock: z
+    .number()
+    .int("Quantity must be a whole number.")
+    .min(0, "Quantity cannot be negative."),
+  minimumStockLevel: z
+    .number()
+    .int("Minimum stock level must be a whole number.")
+    .min(0, "Minimum stock level cannot be negative."),
+});
+
+type InventoryFormValues = z.infer<typeof inventorySchema>;
+
+const initialInventoryFormValues: InventoryFormValues = {
+  quantityInStock: 0,
+  minimumStockLevel: 0,
+};
+
 export default function InventoryPage() {
+  const queryClient = useQueryClient();
+
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
+  const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null);
+  const [successMessage, setSuccessMessage] = useState("");
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<InventoryFormValues>({
+    resolver: zodResolver(inventorySchema),
+    defaultValues: initialInventoryFormValues,
+  });
 
   const inventoryQuery = useQuery({
     queryKey: ["inventory"],
@@ -15,6 +63,17 @@ export default function InventoryPage() {
   const lowStockQuery = useQuery({
     queryKey: ["inventory", "low-stock"],
     queryFn: getLowStockInventoryItems,
+  });
+
+  const updateInventoryMutation = useMutation({
+    mutationFn: (data: { id: string; request: UpdateInventoryItemRequest }) =>
+      updateInventoryItem(data.id, data.request),
+    onSuccess: (updatedItem) => {
+      setSuccessMessage(`${updatedItem.productName} inventory was updated.`);
+      setEditingInventoryItem(null);
+      reset(initialInventoryFormValues);
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+    },
   });
 
   const inventoryItems = inventoryQuery.data ?? [];
@@ -30,7 +89,50 @@ export default function InventoryPage() {
     0,
   );
 
+  function handleStartEdit(item: InventoryItem) {
+    setSuccessMessage("");
+    updateInventoryMutation.reset();
+
+    setEditingInventoryItem(item);
+
+    reset({
+      quantityInStock: item.quantityInStock,
+      minimumStockLevel: item.minimumStockLevel,
+    });
+
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  }
+
+  function handleCancelEdit() {
+    setSuccessMessage("");
+    updateInventoryMutation.reset();
+
+    setEditingInventoryItem(null);
+    reset(initialInventoryFormValues);
+  }
+
+  const handleUpdateInventory: SubmitHandler<InventoryFormValues> = (values) => {
+    if (!editingInventoryItem) {
+      return;
+    }
+
+    setSuccessMessage("");
+    updateInventoryMutation.reset();
+
+    updateInventoryMutation.mutate({
+      id: editingInventoryItem.id,
+      request: {
+        quantityInStock: values.quantityInStock,
+        minimumStockLevel: values.minimumStockLevel,
+      },
+    });
+  };
+
   const errorMessage = getApiErrorMessage(error, "Could not load inventory.");
+  const updateErrorMessage = getApiErrorMessage(
+    updateInventoryMutation.error,
+    "Could not update inventory item.",
+  );
 
   return (
     <div className="space-y-6">
@@ -48,7 +150,7 @@ export default function InventoryPage() {
           </div>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500">
-            Monitor warehouse stock levels, minimum stock limits and low-stock items.
+            Monitor and update warehouse stock levels, minimum stock limits and low-stock items.
           </p>
         </div>
 
@@ -68,6 +170,107 @@ export default function InventoryPage() {
             <p className="mt-1 text-2xl font-bold text-red-700">{lowStockItems.length}</p>
           </div>
         </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
+              <Save size={20} />
+            </div>
+
+            <div>
+              <h3 className="text-base font-semibold text-slate-950">Update inventory</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                {editingInventoryItem
+                  ? `Editing stock levels for ${editingInventoryItem.productName}.`
+                  : "Select an inventory item from the table to update stock levels."}
+              </p>
+            </div>
+          </div>
+
+          {editingInventoryItem && (
+            <button
+              type="button"
+              onClick={handleCancelEdit}
+              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+            >
+              <X size={16} />
+              Cancel edit
+            </button>
+          )}
+        </div>
+
+        {editingInventoryItem ? (
+          <form onSubmit={handleSubmit(handleUpdateInventory)} className="grid gap-4 lg:grid-cols-2">
+            <div className="rounded-xl bg-slate-50 p-4 lg:col-span-2">
+              <p className="text-sm font-semibold text-slate-950">
+                {editingInventoryItem.productName}
+              </p>
+              <p className="mt-1 text-sm text-slate-500">
+                SKU: {editingInventoryItem.productSku}
+              </p>
+            </div>
+
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Quantity in stock</span>
+              <input
+                {...register("quantityInStock", { valueAsNumber: true })}
+                type="number"
+                min="0"
+                step="1"
+                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              {errors.quantityInStock && (
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.quantityInStock.message}
+                </p>
+              )}
+            </label>
+
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Minimum stock level</span>
+              <input
+                {...register("minimumStockLevel", { valueAsNumber: true })}
+                type="number"
+                min="0"
+                step="1"
+                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              {errors.minimumStockLevel && (
+                <p className="mt-1 text-sm text-red-600">
+                  {errors.minimumStockLevel.message}
+                </p>
+              )}
+            </label>
+
+            {successMessage && (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 lg:col-span-2">
+                {successMessage}
+              </div>
+            )}
+
+            {updateInventoryMutation.isError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-2">
+                {updateErrorMessage}
+              </div>
+            )}
+
+            <div className="flex justify-end lg:col-span-2">
+              <button
+                type="submit"
+                disabled={updateInventoryMutation.isPending}
+                className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+              >
+                {updateInventoryMutation.isPending ? "Updating..." : "Update inventory"}
+              </button>
+            </div>
+          </form>
+        ) : (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
+            No inventory item selected.
+          </div>
+        )}
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
@@ -163,6 +366,9 @@ export default function InventoryPage() {
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Updated
                   </th>
+                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Actions
+                  </th>
                 </tr>
               </thead>
 
@@ -204,6 +410,17 @@ export default function InventoryPage() {
                       {item.updatedAt
                         ? new Date(item.updatedAt).toLocaleDateString("sv-SE")
                         : new Date(item.createdAt).toLocaleDateString("sv-SE")}
+                    </td>
+
+                    <td className="whitespace-nowrap px-5 py-4 text-right">
+                      <button
+                        type="button"
+                        onClick={() => handleStartEdit(item)}
+                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                      >
+                        <Pencil size={15} />
+                        Edit
+                      </button>
                     </td>
                   </tr>
                 ))}
