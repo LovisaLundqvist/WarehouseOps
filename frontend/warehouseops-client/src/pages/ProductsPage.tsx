@@ -1,17 +1,38 @@
-﻿import { type FormEvent, useRef, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { Package, Search, SlidersHorizontal } from "lucide-react";
-import { getProducts } from "../api/productsApi";
-import type { ProductFilters } from "../types/product";
+﻿import { type FormEvent, useState } from "react";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { Package, Plus, Search, SlidersHorizontal } from "lucide-react";
+import { type SubmitHandler, useForm } from "react-hook-form";
+import { z } from "zod";
+import { createProduct, getProducts } from "../api/productsApi";
+import type { CreateProductRequest, ProductFilters } from "../types/product";
+import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
 const currencyFormatter = new Intl.NumberFormat("sv-SE", {
   style: "currency",
   currency: "SEK",
 });
 
+const productSchema = z.object({
+  name: z.string().trim().min(1, "Name is required."),
+  sku: z.string().trim().min(1, "SKU is required."),
+  category: z.string().trim().min(1, "Category is required."),
+  description: z.string().optional(),
+  price: z.number().min(0, "Price cannot be negative."),
+});
+
+type ProductFormValues = z.infer<typeof productSchema>;
+
+const initialProductFormValues: ProductFormValues = {
+  name: "",
+  sku: "",
+  category: "",
+  description: "",
+  price: 0,
+};
+
 export default function ProductsPage() {
-  const searchInputRef = useRef<HTMLInputElement>(null);
-  const categoryInputRef = useRef<HTMLInputElement>(null);
+  const queryClient = useQueryClient();
 
   const [draftFilters, setDraftFilters] = useState<ProductFilters>({
     search: "",
@@ -21,6 +42,18 @@ export default function ProductsPage() {
   const [filters, setFilters] = useState<ProductFilters>({
     search: "",
     category: "",
+  });
+
+  const [successMessage, setSuccessMessage] = useState("");
+
+  const {
+    register,
+    handleSubmit,
+    reset,
+    formState: { errors },
+  } = useForm<ProductFormValues>({
+    resolver: zodResolver(productSchema),
+    defaultValues: initialProductFormValues,
   });
 
   const {
@@ -33,7 +66,16 @@ export default function ProductsPage() {
     queryFn: () => getProducts(filters),
   });
 
-  function handleSubmit(event: FormEvent<HTMLFormElement>) {
+  const createProductMutation = useMutation({
+    mutationFn: createProduct,
+    onSuccess: (createdProduct) => {
+      setSuccessMessage(`${createdProduct.name} was created.`);
+      reset(initialProductFormValues);
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    },
+  });
+
+  function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
     setFilters({
@@ -52,7 +94,25 @@ export default function ProductsPage() {
     setFilters(emptyFilters);
   }
 
-  const errorMessage = error instanceof Error ? error.message : "Could not load products.";
+  const handleCreateProduct: SubmitHandler<ProductFormValues> = (values) => {
+    setSuccessMessage("");
+
+    const request: CreateProductRequest = {
+      name: values.name.trim(),
+      sku: values.sku.trim(),
+      category: values.category.trim(),
+      description: values.description?.trim() ?? "",
+      price: values.price,
+    };
+
+    createProductMutation.mutate(request);
+  };
+
+  const listErrorMessage = getApiErrorMessage(error, "Could not load products.");
+  const createErrorMessage = getApiErrorMessage(
+    createProductMutation.error,
+    "Could not create product.",
+  );
 
   return (
     <div className="space-y-6">
@@ -70,7 +130,7 @@ export default function ProductsPage() {
           </div>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500">
-            View warehouse products, search by name or SKU and filter by category.
+            Create products, view warehouse products, search by name or SKU and filter by category.
           </p>
         </div>
 
@@ -81,16 +141,106 @@ export default function ProductsPage() {
       </section>
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <form onSubmit={handleSubmit} className="grid gap-4 lg:grid-cols-[1fr_1fr_auto_auto]">
+        <div className="mb-5 flex items-center gap-3">
+          <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
+            <Plus size={20} />
+          </div>
+
+          <div>
+            <h3 className="text-base font-semibold text-slate-950">Create product</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Add a new product to the warehouse catalog.
+            </p>
+          </div>
+        </div>
+
+        <form onSubmit={handleSubmit(handleCreateProduct)} className="grid gap-4 lg:grid-cols-2">
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">Name</span>
+            <input
+              {...register("name")}
+              placeholder="Example: Laptop Dell XPS 15"
+              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+            {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">SKU</span>
+            <input
+              {...register("sku")}
+              placeholder="Example: LAP-DELL-XPS15"
+              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+            {errors.sku && <p className="mt-1 text-sm text-red-600">{errors.sku.message}</p>}
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">Category</span>
+            <input
+              {...register("category")}
+              placeholder="Example: Electronics"
+              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+            {errors.category && (
+              <p className="mt-1 text-sm text-red-600">{errors.category.message}</p>
+            )}
+          </label>
+
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">Price</span>
+            <input
+              {...register("price", { valueAsNumber: true })}
+              type="number"
+              min="0"
+              step="0.01"
+              placeholder="Example: 18999"
+              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+            {errors.price && <p className="mt-1 text-sm text-red-600">{errors.price.message}</p>}
+          </label>
+
+          <label className="block lg:col-span-2">
+            <span className="text-sm font-medium text-slate-700">Description</span>
+            <textarea
+              {...register("description")}
+              rows={3}
+              placeholder="Short product description"
+              className="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+            />
+          </label>
+
+          {successMessage && (
+            <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 lg:col-span-2">
+              {successMessage}
+            </div>
+          )}
+
+          {createProductMutation.isError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-2">
+              {createErrorMessage}
+            </div>
+          )}
+
+          <div className="flex justify-end lg:col-span-2">
+            <button
+              type="submit"
+              disabled={createProductMutation.isPending}
+              className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+            >
+              {createProductMutation.isPending ? "Creating..." : "Create product"}
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <form onSubmit={handleFilterSubmit} className="grid gap-4 lg:grid-cols-[1fr_1fr_auto_auto]">
           <label className="block">
             <span className="text-sm font-medium text-slate-700">Search</span>
-            <div
-              onClick={() => searchInputRef.current?.focus()}
-              className="mt-2 flex cursor-text items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
-            >
-              <Search size={16} className="pointer-events-none text-slate-400" />
+            <div className="mt-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <Search size={16} className="text-slate-400" />
               <input
-                ref={searchInputRef}
                 value={draftFilters.search}
                 onChange={(event) =>
                   setDraftFilters((current) => ({
@@ -106,13 +256,9 @@ export default function ProductsPage() {
 
           <label className="block">
             <span className="text-sm font-medium text-slate-700">Category</span>
-            <div
-              onClick={() => categoryInputRef.current?.focus()}
-              className="mt-2 flex cursor-text items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2"
-            >
-              <SlidersHorizontal size={16} className="pointer-events-none text-slate-400" />
+            <div className="mt-2 flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2">
+              <SlidersHorizontal size={16} className="text-slate-400" />
               <input
-                ref={categoryInputRef}
                 value={draftFilters.category}
                 onChange={(event) =>
                   setDraftFilters((current) => ({
@@ -159,7 +305,7 @@ export default function ProductsPage() {
 
         {isError && (
           <div className="m-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            {errorMessage}
+            {listErrorMessage}
           </div>
         )}
 
