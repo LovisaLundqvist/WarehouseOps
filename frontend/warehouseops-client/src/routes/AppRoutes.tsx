@@ -2,13 +2,14 @@
 import AppLayout from "../layouts/AppLayout";
 import DashboardPage from "../pages/DashboardPage";
 import PlaceholderPage from "../pages/PlaceholderPage";
+import ProductsPage from "../pages/ProductsPage";
 
 export default function AppRoutes() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
         <Route index element={<DashboardPage />} />
-        <Route path="products" element={<PlaceholderPage title="Products" description="Product management will be implemented in the next frontend step." />} />
+        <Route path="products" element={<ProductsPage />} />
         <Route path="inventory" element={<PlaceholderPage title="Inventory" description="Inventory overview and low-stock handling will be implemented in the next frontend step." />} />
         <Route path="customers" element={<PlaceholderPage title="Customers" description="Customer management will be implemented after the core layout is working." />} />
         <Route path="orders" element={<PlaceholderPage title="Orders" description="Order list, order details and status handling will be implemented in the next frontend step." />} />
