@@ -319,7 +319,7 @@ export default function InventoryPage() {
                 {showLowStockOnly ? "Low-stock inventory" : "Inventory list"}
               </h3>
               <p className="mt-1 text-sm text-slate-500">
-                Data is loaded from the ASP.NET Core Inventory API.
+                Shows current stock levels, minimum stock levels and low stock warnings.
               </p>
             </div>
           </div>
@@ -432,3 +432,4 @@ export default function InventoryPage() {
     </div>
   );
 }
+

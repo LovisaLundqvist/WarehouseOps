@@ -484,7 +484,7 @@ export default function ProductsPage() {
         <div className="border-b border-slate-200 px-5 py-4">
           <h3 className="text-base font-semibold text-slate-950">Product list</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Data is loaded from the ASP.NET Core Product API.
+            Shows all products currently registered in the warehouse.
           </p>
         </div>
 
@@ -591,3 +591,4 @@ export default function ProductsPage() {
     </div>
   );
 }
+

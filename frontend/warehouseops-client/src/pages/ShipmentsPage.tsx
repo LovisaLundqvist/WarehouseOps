@@ -513,7 +513,7 @@ export default function ShipmentsPage() {
           <div>
             <h3 className="text-base font-semibold text-slate-950">Shipment overview</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Status transitions and shipment creation are validated by the ASP.NET Core backend.
+              Shipment creation and status updates are checked before they are saved.
             </p>
           </div>
         </div>
@@ -651,4 +651,5 @@ export default function ShipmentsPage() {
     </div>
   );
 }
+
 

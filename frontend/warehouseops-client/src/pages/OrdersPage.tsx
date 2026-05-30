@@ -428,7 +428,7 @@ export default function OrdersPage() {
             <div>
               <h3 className="text-base font-semibold text-slate-950">Order summary</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Order creation checks customer, product and inventory rules in the backend.
+                Order creation checks customer, product and stock rules before the order is saved.
               </p>
             </div>
           </div>
@@ -894,4 +894,5 @@ export default function OrdersPage() {
     </div>
   );
 }
+
 
