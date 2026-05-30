@@ -21,6 +21,7 @@ import {
 import type { Order } from "../types/order";
 import type { Shipment } from "../types/shipment";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
+import { formatShortId } from "../utils/formatShortId";
 
 const shipmentStatuses = [
   "Pending",
@@ -336,7 +337,7 @@ export default function ShipmentsPage() {
                 <option value="">Select order</option>
                 {availableOrders.map((order) => (
                   <option key={order.id} value={order.id}>
-                    {order.customerName} | {order.status} | {order.id}
+                    {order.customerName} | {order.status} | {formatShortId(order.id, "Order")}
                   </option>
                 ))}
               </select>
@@ -410,7 +411,7 @@ export default function ShipmentsPage() {
               <h3 className="text-base font-semibold text-slate-950">Shipment actions</h3>
               <p className="mt-1 text-sm text-slate-500">
                 {selectedShipment
-                  ? `Managing shipment ${selectedShipment.id}.`
+                  ? `Managing ${formatShortId(selectedShipment.id, "Shipment")}.`
                   : "Select a shipment from the table to update its status."}
               </p>
             </div>
@@ -522,7 +523,7 @@ export default function ShipmentsPage() {
         <div className="border-b border-slate-200 px-5 py-4">
           <h3 className="text-base font-semibold text-slate-950">Shipment list</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Data is loaded from the ASP.NET Core Shipments API.
+            Shows current shipments, tracking numbers and delivery progress.
           </p>
         </div>
 
@@ -575,7 +576,7 @@ export default function ShipmentsPage() {
 
               <tbody className="divide-y divide-slate-100 bg-white">
                 {shipments.map((shipment) => (
-                  <tr key={shipment.id} className="hover:bg-slate-50">
+                  <tr key={formatShortId(shipment.id, "Shipment")} className="hover:bg-slate-50">
                     <td className="px-5 py-4">
                       <div className="flex items-start gap-3">
                         <div className="rounded-xl bg-slate-50 p-2 text-slate-600">
@@ -584,7 +585,7 @@ export default function ShipmentsPage() {
 
                         <div>
                           <p className="text-sm font-semibold text-slate-950">
-                            {shipment.id}
+                            {formatShortId(shipment.id, "Shipment")}
                           </p>
                           <p className="mt-1 text-xs text-slate-500">
                             Created: {formatDate(shipment.createdAt)}
@@ -595,7 +596,7 @@ export default function ShipmentsPage() {
 
                     <td className="px-5 py-4">
                       <p className="text-sm font-medium text-slate-950">
-                        {shipment.orderId}
+                        {formatShortId(shipment.orderId, "Order")}
                       </p>
                       <p className="mt-1 text-xs text-slate-500">
                         {shipment.customerName || "Customer not shown"}
@@ -650,3 +651,4 @@ export default function ShipmentsPage() {
     </div>
   );
 }
+

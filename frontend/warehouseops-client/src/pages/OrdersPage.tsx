@@ -20,6 +20,7 @@ import { createOrder, cancelOrder, getOrders, updateOrderStatus } from "../api/o
 import { getProducts } from "../api/productsApi";
 import type { Order } from "../types/order";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
+import { formatShortId } from "../utils/formatShortId";
 
 const currencyFormatter = new Intl.NumberFormat("sv-SE", {
   style: "currency",
@@ -364,7 +365,7 @@ export default function OrdersPage() {
     }
 
     const confirmed = window.confirm(
-      `Are you sure you want to cancel order ${selectedOrder.id}?`,
+      `Are you sure you want to cancel ${formatShortId(selectedOrder.id, "Order")}?`,
     );
 
     if (!confirmed) {
@@ -619,7 +620,7 @@ export default function OrdersPage() {
               <h3 className="text-base font-semibold text-slate-950">Order actions</h3>
               <p className="mt-1 text-sm text-slate-500">
                 {selectedOrder
-                  ? `Managing order ${selectedOrder.id} for ${selectedOrder.customerName}.`
+                  ? `Managing ${formatShortId(selectedOrder.id, "Order")} for ${selectedOrder.customerName}.`
                   : "Select an order from the table to update status or cancel it."}
               </p>
             </div>
@@ -713,7 +714,7 @@ export default function OrdersPage() {
         <div className="border-b border-slate-200 px-5 py-4">
           <h3 className="text-base font-semibold text-slate-950">Order list</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Data is loaded from the ASP.NET Core Orders API.
+            Shows customer orders, status, items and total value.
           </p>
         </div>
 
@@ -779,7 +780,7 @@ export default function OrdersPage() {
                                 <p className="text-sm font-semibold text-slate-950">
                                   {order.customerName}
                                 </p>
-                                <p className="mt-1 text-xs text-slate-500">{order.id}</p>
+                                <p className="mt-1 text-xs text-slate-500">{formatShortId(order.id, "Order")}</p>
                               </div>
                             </div>
                           </div>
@@ -893,3 +894,4 @@ export default function OrdersPage() {
     </div>
   );
 }
+

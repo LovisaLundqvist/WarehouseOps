@@ -26,6 +26,7 @@ import type {
   ResolveIncidentRequest,
 } from "../types/incident";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
+import { formatShortId } from "../utils/formatShortId";
 
 const incidentStatuses = ["Open", "InProgress", "Resolved", "Closed"];
 const incidentSeverities = ["Low", "Medium", "High", "Critical"];
@@ -36,13 +37,13 @@ const createIncidentSchema = z
     title: z.string().trim().min(1, "Title is required."),
     description: z.string().trim().min(1, "Description is required."),
     severity: z.string().trim().min(1, "Severity is required."),
-    relatedEntityType: z.string().trim().min(1, "Related type is required."),
-    relatedEntityId: z.string().trim().max(100, "Related id cannot be longer than 100 characters."),
+    relatedEntityType: z.string().trim().min(1, "Area is required."),
+    relatedEntityId: z.string().trim().max(100, "Reference number cannot be longer than 100 characters."),
   })
   .refine(
     (values) => values.relatedEntityType === "General" || values.relatedEntityId.trim().length > 0,
     {
-      message: "Related id is required when the incident is connected to another entity.",
+      message: "Reference number is required when the incident is connected to another area.",
       path: ["relatedEntityId"],
     },
   );
@@ -306,7 +307,7 @@ export default function IncidentsPage() {
           </div>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500">
-            Report operational issues, connect incidents to warehouse entities and close them with resolution notes.
+            Report operational issues, connect them to the affected area and close them with resolution notes.
           </p>
         </div>
 
@@ -337,7 +338,7 @@ export default function IncidentsPage() {
           <div>
             <h3 className="text-base font-semibold text-slate-950">Report incident</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Create a new incident and connect it to a product, inventory item, customer, order or shipment when needed.
+              Create a new incident and connect it to a product, stock item, customer, order or shipment when needed.
             </p>
           </div>
         </div>
@@ -371,7 +372,7 @@ export default function IncidentsPage() {
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium text-slate-700">Related type</span>
+            <span className="text-sm font-medium text-slate-700">Area</span>
             <select
               {...register("relatedEntityType")}
               className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
@@ -388,10 +389,10 @@ export default function IncidentsPage() {
           </label>
 
           <label className="block lg:col-span-2">
-            <span className="text-sm font-medium text-slate-700">Related id or tracking number</span>
+            <span className="text-sm font-medium text-slate-700">Reference number</span>
             <input
               {...register("relatedEntityId")}
-              placeholder="Example: order id, product id or SE-TRK-1001"
+              placeholder="Example: order number, product code or tracking number"
               className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             />
             {errors.relatedEntityId && (
@@ -599,7 +600,7 @@ export default function IncidentsPage() {
         <div className="border-b border-slate-200 px-5 py-4">
           <h3 className="text-base font-semibold text-slate-950">Incident list</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Data is loaded from the ASP.NET Core Incidents API.
+            Shows reported issues and their current handling status.
           </p>
         </div>
 
@@ -633,7 +634,7 @@ export default function IncidentsPage() {
                     Severity
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Related
+                    Area
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Status
@@ -664,7 +665,7 @@ export default function IncidentsPage() {
                           <p className="mt-1 max-w-xl text-sm text-slate-500">
                             {incident.description}
                           </p>
-                          <p className="mt-1 text-xs text-slate-400">{incident.id}</p>
+                          <p className="mt-1 text-xs text-slate-400">{formatShortId(incident.id, "Incident")}</p>
                         </div>
                       </div>
                     </td>
@@ -736,4 +737,5 @@ export default function IncidentsPage() {
     </div>
   );
 }
+
 
