@@ -1,5 +1,4 @@
 ﻿import { Outlet } from "react-router-dom";
-import { Bell, Search } from "lucide-react";
 import Sidebar from "../components/Sidebar";
 
 export default function AppLayout() {
@@ -15,15 +14,8 @@ export default function AppLayout() {
               <h1 className="text-lg font-semibold text-slate-950">Operations dashboard</h1>
             </div>
 
-            <div className="hidden items-center gap-3 md:flex">
-              <div className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm text-slate-500">
-                <Search size={16} />
-                <span>Search operations</span>
-              </div>
-
-              <button className="rounded-full border border-slate-200 bg-white p-2 text-slate-600 shadow-sm hover:bg-slate-50">
-                <Bell size={18} />
-              </button>
+            <div className="hidden rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 md:block">
+              Internal logistics system
             </div>
           </div>
         </header>

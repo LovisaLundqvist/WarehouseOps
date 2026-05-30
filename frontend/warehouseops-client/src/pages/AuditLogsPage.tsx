@@ -79,7 +79,7 @@ export default function AuditLogsPage() {
   const updatedCount = auditLogs.filter((auditLog) => auditLog.action === "Updated").length;
   const deletedCount = auditLogs.filter((auditLog) => auditLog.action === "Deleted").length;
 
-  const errorMessage = getApiErrorMessage(error, "Could not load audit logs.");
+  const errorMessage = getApiErrorMessage(error, "Could not load change history.");
 
   function handleClearFilters() {
     setSearchTerm("");
@@ -97,12 +97,12 @@ export default function AuditLogsPage() {
 
             <div>
               <p className="text-sm font-medium text-blue-600">System traceability</p>
-              <h2 className="text-2xl font-bold text-slate-950">Audit Logs</h2>
+              <h2 className="text-2xl font-bold text-slate-950">Change History</h2>
             </div>
           </div>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500">
-            View important system changes, who performed them, when they happened and what changed.
+            View important changes in the system, who made them, when they happened and what changed.
           </p>
         </div>
 
@@ -131,9 +131,9 @@ export default function AuditLogsPage() {
           </div>
 
           <div>
-            <h3 className="text-base font-semibold text-slate-950">Filter audit logs</h3>
+            <h3 className="text-base font-semibold text-slate-950">Filter change history</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Filter by entity type or search in action, user and change details.
+              Filter by area or search in action, user and change details.
             </p>
           </div>
         </div>
@@ -146,20 +146,20 @@ export default function AuditLogsPage() {
               <input
                 value={searchTerm}
                 onChange={(event) => setSearchTerm(event.target.value)}
-                placeholder="Search action, user or changes"
+                placeholder="Search action, user or change"
                 className="w-full border-0 bg-transparent text-sm text-slate-950 outline-none placeholder:text-slate-400"
               />
             </div>
           </label>
 
           <label className="block">
-            <span className="text-sm font-medium text-slate-700">Entity</span>
+            <span className="text-sm font-medium text-slate-700">Area</span>
             <select
               value={selectedEntity}
               onChange={(event) => setSelectedEntity(event.target.value)}
               className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
             >
-              <option value="">All entities</option>
+              <option value="">All areas</option>
               {entityNames.map((entityName) => (
                 <option key={entityName} value={entityName}>
                   {entityName}
@@ -180,15 +180,15 @@ export default function AuditLogsPage() {
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-5 py-4">
-          <h3 className="text-base font-semibold text-slate-950">Audit log list</h3>
+          <h3 className="text-base font-semibold text-slate-950">Change history list</h3>
           <p className="mt-1 text-sm text-slate-500">
-            Data is loaded from the ASP.NET Core Audit Logs API.
+            Shows important changes made in products, stock, customers, orders, shipments and incidents.
           </p>
         </div>
 
         {isLoading && (
           <div className="p-6 text-sm text-slate-500">
-            Loading audit logs...
+            Loading change history...
           </div>
         )}
 
@@ -200,7 +200,7 @@ export default function AuditLogsPage() {
 
         {!isLoading && !isError && filteredAuditLogs.length === 0 && (
           <div className="p-6 text-sm text-slate-500">
-            No audit logs found.
+            No changes found.
           </div>
         )}
 

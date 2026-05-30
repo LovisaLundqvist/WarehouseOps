@@ -19,7 +19,7 @@ const navigationItems = [
   { name: "Orders", path: "/orders", icon: ClipboardList },
   { name: "Shipments", path: "/shipments", icon: Truck },
   { name: "Incidents", path: "/incidents", icon: AlertTriangle },
-  { name: "Audit Logs", path: "/audit-logs", icon: History },
+  { name: "Change History", path: "/audit-logs", icon: History },
 ];
 
 export default function Sidebar() {
@@ -64,7 +64,7 @@ export default function Sidebar() {
       <div className="absolute bottom-5 left-4 right-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
         <p className="text-sm font-semibold text-white">System status</p>
         <p className="mt-1 text-xs leading-5 text-slate-400">
-          Backend APIs are ready for Products, Inventory, Customers, Orders, Shipments, Incidents and Audit Logs.
+          Products, stock, customers, orders, shipments, incidents and change history are available.
         </p>
       </div>
     </aside>
