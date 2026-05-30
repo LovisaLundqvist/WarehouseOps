@@ -1,5 +1,6 @@
 ﻿import { Navigate, Route, Routes } from "react-router-dom";
 import AppLayout from "../layouts/AppLayout";
+import CustomersPage from "../pages/CustomersPage";
 import DashboardPage from "../pages/DashboardPage";
 import InventoryPage from "../pages/InventoryPage";
 import OrdersPage from "../pages/OrdersPage";
@@ -14,9 +15,9 @@ export default function AppRoutes() {
         <Route index element={<DashboardPage />} />
         <Route path="products" element={<ProductsPage />} />
         <Route path="inventory" element={<InventoryPage />} />
+        <Route path="customers" element={<CustomersPage />} />
         <Route path="orders" element={<OrdersPage />} />
         <Route path="shipments" element={<ShipmentsPage />} />
-        <Route path="customers" element={<PlaceholderPage title="Customers" description="Customer management will be implemented after the core layout is working." />} />
         <Route path="incidents" element={<PlaceholderPage title="Incidents" description="Incident reporting and incident status handling will be implemented in the next frontend step." />} />
         <Route path="audit-logs" element={<PlaceholderPage title="Audit Logs" description="Audit log viewing will be connected after authentication and roles are added." />} />
       </Route>
