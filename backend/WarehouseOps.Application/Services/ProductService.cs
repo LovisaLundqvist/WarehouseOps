@@ -121,6 +121,13 @@ public class ProductService : IProductService
             return false;
         }
 
+        var isProductInUse = await _productRepository.IsProductInUseAsync(id);
+
+        if (isProductInUse)
+        {
+            throw new InvalidOperationException("This product cannot be deleted because it is used in inventory or order history.");
+        }
+
         var productName = product.Name;
         var productSku = product.Sku;
 

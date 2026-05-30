@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using WarehouseOps.Application.Interfaces;
 using WarehouseOps.Domain;
 
@@ -51,6 +51,20 @@ public class ProductRepository : IProductRepository
             .AnyAsync(product =>
                 product.Sku == sku &&
                 (!excludedProductId.HasValue || product.Id != excludedProductId.Value));
+    }
+
+    public async Task<bool> IsProductInUseAsync(Guid productId)
+    {
+        var isUsedInInventory = await _context.InventoryItems
+            .AnyAsync(inventoryItem => inventoryItem.ProductId == productId);
+
+        if (isUsedInInventory)
+        {
+            return true;
+        }
+
+        return await _context.OrderItems
+            .AnyAsync(orderItem => orderItem.ProductId == productId);
     }
 
     public async Task AddAsync(Product product)

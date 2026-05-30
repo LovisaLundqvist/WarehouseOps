@@ -1,4 +1,4 @@
-using WarehouseOps.Domain;
+﻿using WarehouseOps.Domain;
 
 namespace WarehouseOps.Application.Interfaces;
 
@@ -9,6 +9,8 @@ public interface IProductRepository
     Task<Product?> GetByIdAsync(Guid id);
 
     Task<bool> SkuExistsAsync(string sku, Guid? excludedProductId = null);
+
+    Task<bool> IsProductInUseAsync(Guid productId);
 
     Task AddAsync(Product product);
 

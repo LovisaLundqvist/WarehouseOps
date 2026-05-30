@@ -1,4 +1,4 @@
-using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Mvc;
 using WarehouseOps.Application.Dtos;
 using WarehouseOps.Application.Interfaces;
 
@@ -84,13 +84,20 @@ public class ProductsController : ControllerBase
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
-        var deleted = await _productService.DeleteAsync(id);
-
-        if (!deleted)
+        try
         {
-            return NotFound();
-        }
+            var deleted = await _productService.DeleteAsync(id);
 
-        return NoContent();
+            if (!deleted)
+            {
+                return NotFound();
+            }
+
+            return NoContent();
+        }
+        catch (InvalidOperationException exception)
+        {
+            return Conflict(exception.Message);
+        }
     }
 }
