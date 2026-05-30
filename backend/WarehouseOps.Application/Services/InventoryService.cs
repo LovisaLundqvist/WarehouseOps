@@ -7,10 +7,12 @@ namespace WarehouseOps.Application.Services;
 public class InventoryService : IInventoryService
 {
     private readonly IInventoryRepository _inventoryRepository;
+    private readonly IAuditLogService _auditLogService;
 
-    public InventoryService(IInventoryRepository inventoryRepository)
+    public InventoryService(IInventoryRepository inventoryRepository, IAuditLogService auditLogService)
     {
         _inventoryRepository = inventoryRepository;
+        _auditLogService = auditLogService;
     }
 
     public async Task<List<InventoryItemDto>> GetAllAsync()
@@ -81,6 +83,14 @@ public class InventoryService : IInventoryService
             throw new InvalidOperationException("Inventory item could not be loaded after creation.");
         }
 
+        var productName = createdInventoryItem.Product?.Name ?? createdInventoryItem.ProductId.ToString();
+
+        await _auditLogService.LogAsync(
+            "Inventory",
+            "Created",
+            "System",
+            $"Created inventory item for product {productName} with quantity {createdInventoryItem.QuantityInStock} and minimum stock level {createdInventoryItem.MinimumStockLevel}.");
+
         return MapToDto(createdInventoryItem);
     }
 
@@ -95,11 +105,22 @@ public class InventoryService : IInventoryService
             return null;
         }
 
+        var oldQuantityInStock = inventoryItem.QuantityInStock;
+        var oldMinimumStockLevel = inventoryItem.MinimumStockLevel;
+
         inventoryItem.QuantityInStock = request.QuantityInStock;
         inventoryItem.MinimumStockLevel = request.MinimumStockLevel;
         inventoryItem.UpdatedAt = DateTime.UtcNow;
 
         await _inventoryRepository.SaveChangesAsync();
+
+        var productName = inventoryItem.Product?.Name ?? inventoryItem.ProductId.ToString();
+
+        await _auditLogService.LogAsync(
+            "Inventory",
+            "Updated",
+            "System",
+            $"Updated inventory item {inventoryItem.Id} for product {productName}. Old values: QuantityInStock={oldQuantityInStock}, MinimumStockLevel={oldMinimumStockLevel}. New values: QuantityInStock={inventoryItem.QuantityInStock}, MinimumStockLevel={inventoryItem.MinimumStockLevel}.");
 
         return MapToDto(inventoryItem);
     }

@@ -7,10 +7,12 @@ namespace WarehouseOps.Application.Services;
 public class ShipmentService : IShipmentService
 {
     private readonly IShipmentRepository _shipmentRepository;
+    private readonly IAuditLogService _auditLogService;
 
-    public ShipmentService(IShipmentRepository shipmentRepository)
+    public ShipmentService(IShipmentRepository shipmentRepository, IAuditLogService auditLogService)
     {
         _shipmentRepository = shipmentRepository;
+        _auditLogService = auditLogService;
     }
 
     public async Task<List<ShipmentDto>> GetAllAsync()
@@ -77,6 +79,12 @@ public class ShipmentService : IShipmentService
             throw new InvalidOperationException("Shipment could not be loaded after creation.");
         }
 
+        await _auditLogService.LogAsync(
+            "Shipment",
+            "Created",
+            "System",
+            $"Created shipment {createdShipment.Id} for order {createdShipment.OrderId} with tracking number {createdShipment.TrackingNumber}.");
+
         return MapToDto(createdShipment);
     }
 
@@ -96,6 +104,8 @@ public class ShipmentService : IShipmentService
             throw new InvalidOperationException($"Shipment status cannot be changed from {shipment.Status} to {newStatus}.");
         }
 
+        var oldStatus = shipment.Status;
+
         shipment.Status = newStatus;
         shipment.UpdatedAt = DateTime.UtcNow;
 
@@ -110,6 +120,12 @@ public class ShipmentService : IShipmentService
         }
 
         await _shipmentRepository.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            "Shipment",
+            "Updated",
+            "System",
+            $"Updated shipment {shipment.Id} status from {oldStatus} to {shipment.Status}.");
 
         return MapToDto(shipment);
     }

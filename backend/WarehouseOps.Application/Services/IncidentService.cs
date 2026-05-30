@@ -7,10 +7,12 @@ namespace WarehouseOps.Application.Services;
 public class IncidentService : IIncidentService
 {
     private readonly IIncidentRepository _incidentRepository;
+    private readonly IAuditLogService _auditLogService;
 
-    public IncidentService(IIncidentRepository incidentRepository)
+    public IncidentService(IIncidentRepository incidentRepository, IAuditLogService auditLogService)
     {
         _incidentRepository = incidentRepository;
+        _auditLogService = auditLogService;
     }
 
     public async Task<List<IncidentDto>> GetAllAsync(string? status)
@@ -61,6 +63,12 @@ public class IncidentService : IIncidentService
 
         await _incidentRepository.SaveChangesAsync();
 
+        await _auditLogService.LogAsync(
+            "Incident",
+            "Created",
+            "System",
+            $"Created incident {incident.Id}. Title={incident.Title}, Severity={incident.Severity}, RelatedEntityType={incident.RelatedEntityType}, RelatedEntityId={incident.RelatedEntityId}.");
+
         return MapToDto(incident);
     }
 
@@ -80,6 +88,8 @@ public class IncidentService : IIncidentService
             throw new InvalidOperationException($"Incident status cannot be changed from {incident.Status} to {newStatus}.");
         }
 
+        var oldStatus = incident.Status;
+
         incident.Status = newStatus;
         incident.UpdatedAt = DateTime.UtcNow;
 
@@ -89,6 +99,14 @@ public class IncidentService : IIncidentService
         }
 
         await _incidentRepository.SaveChangesAsync();
+
+        var action = newStatus == IncidentStatus.Closed ? "Closed" : "Updated";
+
+        await _auditLogService.LogAsync(
+            "Incident",
+            action,
+            "System",
+            $"Updated incident {incident.Id} status from {oldStatus} to {incident.Status}.");
 
         return MapToDto(incident);
     }
@@ -109,12 +127,20 @@ public class IncidentService : IIncidentService
             throw new InvalidOperationException("Closed incidents cannot be resolved again.");
         }
 
+        var oldStatus = incident.Status;
+
         incident.Status = IncidentStatus.Closed;
         incident.ResolutionNotes = request.ResolutionNotes.Trim();
         incident.ClosedAt = DateTime.UtcNow;
         incident.UpdatedAt = DateTime.UtcNow;
 
         await _incidentRepository.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            "Incident",
+            "Closed",
+            "System",
+            $"Closed incident {incident.Id}. Old status={oldStatus}. Resolution notes={incident.ResolutionNotes}.");
 
         return MapToDto(incident);
     }

@@ -7,10 +7,12 @@ namespace WarehouseOps.Application.Services;
 public class OrderService : IOrderService
 {
     private readonly IOrderRepository _orderRepository;
+    private readonly IAuditLogService _auditLogService;
 
-    public OrderService(IOrderRepository orderRepository)
+    public OrderService(IOrderRepository orderRepository, IAuditLogService auditLogService)
     {
         _orderRepository = orderRepository;
+        _auditLogService = auditLogService;
     }
 
     public async Task<List<OrderDto>> GetAllAsync()
@@ -114,6 +116,12 @@ public class OrderService : IOrderService
             throw new InvalidOperationException("Order could not be loaded after creation.");
         }
 
+        await _auditLogService.LogAsync(
+            "Order",
+            "Created",
+            "System",
+            $"Created order {createdOrder.Id} for customer {createdOrder.Customer?.Name} with {createdOrder.OrderItems.Count} item(s) and total amount {createdOrder.TotalAmount}.");
+
         return MapToDto(createdOrder);
     }
 
@@ -133,10 +141,18 @@ public class OrderService : IOrderService
             throw new InvalidOperationException($"Order status cannot be changed from {order.Status} to {newStatus}.");
         }
 
+        var oldStatus = order.Status;
+
         order.Status = newStatus;
         order.UpdatedAt = DateTime.UtcNow;
 
         await _orderRepository.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            "Order",
+            "Updated",
+            "System",
+            $"Updated order {order.Id} status from {oldStatus} to {order.Status}.");
 
         return MapToDto(order);
     }
@@ -175,6 +191,12 @@ public class OrderService : IOrderService
         order.UpdatedAt = DateTime.UtcNow;
 
         await _orderRepository.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            "Order",
+            "Cancelled",
+            "System",
+            $"Cancelled order {order.Id} and returned {order.OrderItems.Sum(orderItem => orderItem.Quantity)} item(s) to inventory.");
 
         return MapToDto(order);
     }

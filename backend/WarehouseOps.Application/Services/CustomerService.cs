@@ -7,10 +7,12 @@ namespace WarehouseOps.Application.Services;
 public class CustomerService : ICustomerService
 {
     private readonly ICustomerRepository _customerRepository;
+    private readonly IAuditLogService _auditLogService;
 
-    public CustomerService(ICustomerRepository customerRepository)
+    public CustomerService(ICustomerRepository customerRepository, IAuditLogService auditLogService)
     {
         _customerRepository = customerRepository;
+        _auditLogService = auditLogService;
     }
 
     public async Task<List<CustomerDto>> GetAllAsync(string? search)
@@ -61,6 +63,12 @@ public class CustomerService : ICustomerService
 
         await _customerRepository.SaveChangesAsync();
 
+        await _auditLogService.LogAsync(
+            "Customer",
+            "Created",
+            "System",
+            $"Created customer {customer.Name} with email {customer.Email}.");
+
         return MapToDto(customer);
     }
 
@@ -84,6 +92,11 @@ public class CustomerService : ICustomerService
             throw new InvalidOperationException("A customer with this email already exists.");
         }
 
+        var oldName = customer.Name;
+        var oldEmail = customer.Email;
+        var oldPhoneNumber = customer.PhoneNumber;
+        var oldAddress = customer.Address;
+
         customer.Name = request.Name.Trim();
         customer.Email = trimmedEmail;
         customer.PhoneNumber = request.PhoneNumber.Trim();
@@ -91,6 +104,12 @@ public class CustomerService : ICustomerService
         customer.UpdatedAt = DateTime.UtcNow;
 
         await _customerRepository.SaveChangesAsync();
+
+        await _auditLogService.LogAsync(
+            "Customer",
+            "Updated",
+            "System",
+            $"Updated customer {customer.Id}. Old values: Name={oldName}, Email={oldEmail}, PhoneNumber={oldPhoneNumber}, Address={oldAddress}. New values: Name={customer.Name}, Email={customer.Email}, PhoneNumber={customer.PhoneNumber}, Address={customer.Address}.");
 
         return MapToDto(customer);
     }
