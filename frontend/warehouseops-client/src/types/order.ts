@@ -18,6 +18,16 @@ export type Order = {
   updatedAt: string | null;
 };
 
+export type CreateOrderItemRequest = {
+  productId: string;
+  quantity: number;
+};
+
+export type CreateOrderRequest = {
+  customerId: string;
+  items: CreateOrderItemRequest[];
+};
+
 export type UpdateOrderStatusRequest = {
   status: string;
 };

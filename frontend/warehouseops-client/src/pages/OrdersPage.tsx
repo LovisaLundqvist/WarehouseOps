@@ -6,12 +6,18 @@ import {
   ChevronUp,
   ClipboardList,
   Package,
+  Plus,
   ReceiptText,
   Settings,
+  ShoppingCart,
+  Trash2,
   User,
   X,
 } from "lucide-react";
-import { cancelOrder, getOrders, updateOrderStatus } from "../api/ordersApi";
+import { z } from "zod";
+import { getCustomers } from "../api/customersApi";
+import { createOrder, cancelOrder, getOrders, updateOrderStatus } from "../api/ordersApi";
+import { getProducts } from "../api/productsApi";
 import type { Order } from "../types/order";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
@@ -28,6 +34,49 @@ const orderStatuses = [
   "Completed",
   "Cancelled",
 ];
+
+const createOrderSchema = z.object({
+  customerId: z.string().trim().min(1, "Customer is required."),
+  items: z
+    .array(
+      z.object({
+        productId: z.string().trim().min(1, "Product is required."),
+        quantity: z.number().int().min(1, "Quantity must be greater than zero."),
+      }),
+    )
+    .min(1, "An order must contain at least one order item.")
+    .superRefine((items, context) => {
+      const productIds = new Set<string>();
+
+      items.forEach((item, index) => {
+        if (!item.productId) {
+          return;
+        }
+
+        if (productIds.has(item.productId)) {
+          context.addIssue({
+            code: "custom",
+            message: "The same product cannot be added more than once.",
+            path: [index, "productId"],
+          });
+        }
+
+        productIds.add(item.productId);
+      });
+    }),
+});
+
+type CreateOrderFormValues = z.infer<typeof createOrderSchema>;
+
+const initialCreateOrderFormValues: CreateOrderFormValues = {
+  customerId: "",
+  items: [
+    {
+      productId: "",
+      quantity: 1,
+    },
+  ],
+};
 
 function getStatusBadgeClass(status: string) {
   switch (status) {
@@ -58,6 +107,20 @@ function canCancelOrder(order: Order) {
   return order.status !== "Shipped" && order.status !== "Completed" && order.status !== "Cancelled";
 }
 
+function mapValidationErrors(error: z.ZodError<CreateOrderFormValues>) {
+  const validationErrors: Record<string, string> = {};
+
+  error.issues.forEach((issue) => {
+    const path = issue.path.join(".");
+
+    if (path) {
+      validationErrors[path] = issue.message;
+    }
+  });
+
+  return validationErrors;
+}
+
 export default function OrdersPage() {
   const queryClient = useQueryClient();
 
@@ -65,6 +128,12 @@ export default function OrdersPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [selectedStatus, setSelectedStatus] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [createOrderForm, setCreateOrderForm] = useState<CreateOrderFormValues>(
+    initialCreateOrderFormValues,
+  );
+  const [createOrderValidationErrors, setCreateOrderValidationErrors] = useState<
+    Record<string, string>
+  >({});
 
   const {
     data: orders = [],
@@ -74,6 +143,39 @@ export default function OrdersPage() {
   } = useQuery({
     queryKey: ["orders"],
     queryFn: getOrders,
+  });
+
+  const {
+    data: customers = [],
+    isLoading: isLoadingCustomers,
+    isError: isCustomersError,
+    error: customersError,
+  } = useQuery({
+    queryKey: ["customers", "order-form"],
+    queryFn: () => getCustomers(),
+  });
+
+  const {
+    data: products = [],
+    isLoading: isLoadingProducts,
+    isError: isProductsError,
+    error: productsError,
+  } = useQuery({
+    queryKey: ["products", "order-form"],
+    queryFn: () => getProducts(),
+  });
+
+  const createOrderMutation = useMutation({
+    mutationFn: createOrder,
+    onSuccess: (createdOrder) => {
+      setSuccessMessage(`Order was created for ${createdOrder.customerName}.`);
+      setCreateOrderForm(initialCreateOrderFormValues);
+      setCreateOrderValidationErrors({});
+      setSelectedOrder(createdOrder);
+      setSelectedStatus(createdOrder.status);
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+    },
   });
 
   const updateStatusMutation = useMutation({
@@ -94,6 +196,7 @@ export default function OrdersPage() {
       setSelectedOrder(cancelledOrder);
       setSelectedStatus(cancelledOrder.status);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
     },
   });
 
@@ -101,7 +204,32 @@ export default function OrdersPage() {
   const completedOrdersCount = orders.filter((order) => order.status === "Completed").length;
   const totalOrderValue = orders.reduce((sum, order) => sum + order.totalAmount, 0);
 
+  const estimatedOrderTotal = createOrderForm.items.reduce((sum, item) => {
+    const product = products.find((currentProduct) => currentProduct.id === item.productId);
+
+    if (!product) {
+      return sum;
+    }
+
+    return sum + product.price * item.quantity;
+  }, 0);
+
   const errorMessage = getApiErrorMessage(error, "Could not load orders.");
+
+  const customerLoadErrorMessage = getApiErrorMessage(
+    customersError,
+    "Could not load customers for the order form.",
+  );
+
+  const productLoadErrorMessage = getApiErrorMessage(
+    productsError,
+    "Could not load products for the order form.",
+  );
+
+  const createOrderErrorMessage = getApiErrorMessage(
+    createOrderMutation.error,
+    "Could not create order.",
+  );
 
   const actionErrorMessage = getApiErrorMessage(
     updateStatusMutation.error ?? cancelOrderMutation.error,
@@ -110,6 +238,9 @@ export default function OrdersPage() {
 
   const hasActionError = updateStatusMutation.isError || cancelOrderMutation.isError;
   const isActionPending = updateStatusMutation.isPending || cancelOrderMutation.isPending;
+  const isCreateOrderPending = createOrderMutation.isPending;
+  const isCreateOrderDataLoading = isLoadingCustomers || isLoadingProducts;
+  const hasCreateOrderDataError = isCustomersError || isProductsError;
 
   function toggleOrderDetails(orderId: string) {
     setExpandedOrderId((current) => (current === orderId ? null : orderId));
@@ -117,6 +248,7 @@ export default function OrdersPage() {
 
   function handleSelectOrder(order: Order) {
     setSuccessMessage("");
+    createOrderMutation.reset();
     updateStatusMutation.reset();
     cancelOrderMutation.reset();
 
@@ -135,12 +267,88 @@ export default function OrdersPage() {
     setSelectedStatus("");
   }
 
+  function handleCreateOrderCustomerChange(customerId: string) {
+    setCreateOrderForm((current) => ({
+      ...current,
+      customerId,
+    }));
+  }
+
+  function handleCreateOrderItemProductChange(index: number, productId: string) {
+    setCreateOrderForm((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              productId,
+            }
+          : item,
+      ),
+    }));
+  }
+
+  function handleCreateOrderItemQuantityChange(index: number, quantity: number) {
+    setCreateOrderForm((current) => ({
+      ...current,
+      items: current.items.map((item, itemIndex) =>
+        itemIndex === index
+          ? {
+              ...item,
+              quantity,
+            }
+          : item,
+      ),
+    }));
+  }
+
+  function handleAddOrderItem() {
+    setCreateOrderForm((current) => ({
+      ...current,
+      items: [
+        ...current.items,
+        {
+          productId: "",
+          quantity: 1,
+        },
+      ],
+    }));
+  }
+
+  function handleRemoveOrderItem(index: number) {
+    setCreateOrderForm((current) => ({
+      ...current,
+      items:
+        current.items.length === 1
+          ? current.items
+          : current.items.filter((_item, itemIndex) => itemIndex !== index),
+    }));
+  }
+
+  function handleCreateOrderSubmit() {
+    setSuccessMessage("");
+    createOrderMutation.reset();
+    updateStatusMutation.reset();
+    cancelOrderMutation.reset();
+
+    const result = createOrderSchema.safeParse(createOrderForm);
+
+    if (!result.success) {
+      setCreateOrderValidationErrors(mapValidationErrors(result.error));
+      return;
+    }
+
+    setCreateOrderValidationErrors({});
+    createOrderMutation.mutate(result.data);
+  }
+
   function handleUpdateStatus() {
     if (!selectedOrder || !selectedStatus) {
       return;
     }
 
     setSuccessMessage("");
+    createOrderMutation.reset();
     updateStatusMutation.reset();
     cancelOrderMutation.reset();
 
@@ -164,6 +372,7 @@ export default function OrdersPage() {
     }
 
     setSuccessMessage("");
+    createOrderMutation.reset();
     updateStatusMutation.reset();
     cancelOrderMutation.reset();
 
@@ -186,7 +395,7 @@ export default function OrdersPage() {
           </div>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500">
-            View customer orders, inspect order lines, update order status and cancel orders when business rules allow it.
+            Create customer orders, inspect order lines, update order status and cancel orders when business rules allow it.
           </p>
         </div>
 
@@ -218,7 +427,7 @@ export default function OrdersPage() {
             <div>
               <h3 className="text-base font-semibold text-slate-950">Order summary</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Status transitions are validated by the ASP.NET Core backend.
+                Order creation checks customer, product and inventory rules in the backend.
               </p>
             </div>
           </div>
@@ -229,6 +438,173 @@ export default function OrdersPage() {
               {currencyFormatter.format(totalOrderValue)}
             </p>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-5 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
+              <ShoppingCart size={20} />
+            </div>
+
+            <div>
+              <h3 className="text-base font-semibold text-slate-950">Create order</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Select a customer and one or more products. Stock is reduced when the order is created.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 px-5 py-4">
+            <p className="text-sm font-medium text-slate-500">Estimated total</p>
+            <p className="mt-1 text-xl font-bold text-slate-950">
+              {currencyFormatter.format(estimatedOrderTotal)}
+            </p>
+          </div>
+        </div>
+
+        {hasCreateOrderDataError && (
+          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <div className="flex gap-2">
+              <AlertTriangle size={18} />
+              <span>
+                {isCustomersError ? customerLoadErrorMessage : productLoadErrorMessage}
+              </span>
+            </div>
+          </div>
+        )}
+
+        <div className="grid gap-4">
+          <label className="block">
+            <span className="text-sm font-medium text-slate-700">Customer</span>
+            <select
+              value={createOrderForm.customerId}
+              onChange={(event) => handleCreateOrderCustomerChange(event.target.value)}
+              disabled={isCreateOrderDataLoading || hasCreateOrderDataError}
+              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+            >
+              <option value="">Select customer</option>
+              {customers.map((customer) => (
+                <option key={customer.id} value={customer.id}>
+                  {customer.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {createOrderValidationErrors.customerId && (
+            <p className="text-sm text-red-600">{createOrderValidationErrors.customerId}</p>
+          )}
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <h4 className="text-sm font-semibold text-slate-950">Order items</h4>
+
+              <button
+                type="button"
+                onClick={handleAddOrderItem}
+                disabled={isCreateOrderDataLoading || hasCreateOrderDataError}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
+              >
+                <Plus size={15} />
+                Add item
+              </button>
+            </div>
+
+            {createOrderForm.items.map((item, index) => {
+              const product = products.find((currentProduct) => currentProduct.id === item.productId);
+              const lineTotal = product ? product.price * item.quantity : 0;
+
+              return (
+                <div
+                  key={`create-order-item-${index}`}
+                  className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[1fr_160px_160px_auto] lg:items-start"
+                >
+                  <div>
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-700">Product</span>
+                      <select
+                        value={item.productId}
+                        onChange={(event) => handleCreateOrderItemProductChange(index, event.target.value)}
+                        disabled={isCreateOrderDataLoading || hasCreateOrderDataError}
+                        className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+                      >
+                        <option value="">Select product</option>
+                        {products.map((currentProduct) => (
+                          <option key={currentProduct.id} value={currentProduct.id}>
+                            {currentProduct.name} ({currentProduct.sku})
+                          </option>
+                        ))}
+                      </select>
+                    </label>
+
+                    {createOrderValidationErrors[`items.${index}.productId`] && (
+                      <p className="mt-2 text-sm text-red-600">
+                        {createOrderValidationErrors[`items.${index}.productId`]}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className="block">
+                      <span className="text-sm font-medium text-slate-700">Quantity</span>
+                      <input
+                        type="number"
+                        min="1"
+                        value={item.quantity}
+                        onChange={(event) =>
+                          handleCreateOrderItemQuantityChange(index, Number(event.target.value))
+                        }
+                        disabled={isCreateOrderDataLoading || hasCreateOrderDataError}
+                        className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+                      />
+                    </label>
+
+                    {createOrderValidationErrors[`items.${index}.quantity`] && (
+                      <p className="mt-2 text-sm text-red-600">
+                        {createOrderValidationErrors[`items.${index}.quantity`]}
+                      </p>
+                    )}
+                  </div>
+
+                  <div>
+                    <p className="text-sm font-medium text-slate-700">Line total</p>
+                    <p className="mt-3 text-sm font-semibold text-slate-950">
+                      {currencyFormatter.format(lineTotal)}
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveOrderItem(index)}
+                    disabled={createOrderForm.items.length === 1}
+                    className="mt-7 inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          {createOrderMutation.isError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              <div className="flex gap-2">
+                <AlertTriangle size={18} />
+                <span>{createOrderErrorMessage}</span>
+              </div>
+            </div>
+          )}
+
+          <button
+            type="button"
+            onClick={handleCreateOrderSubmit}
+            disabled={isCreateOrderPending || isCreateOrderDataLoading || hasCreateOrderDataError}
+            className="justify-self-start rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+          >
+            {isCreateOrderPending ? "Creating..." : "Create order"}
+          </button>
         </div>
       </section>
 
@@ -517,4 +893,3 @@ export default function OrdersPage() {
     </div>
   );
 }
-
