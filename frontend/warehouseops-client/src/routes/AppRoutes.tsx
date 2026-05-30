@@ -2,6 +2,7 @@
 import AppLayout from "../layouts/AppLayout";
 import CustomersPage from "../pages/CustomersPage";
 import DashboardPage from "../pages/DashboardPage";
+import IncidentsPage from "../pages/IncidentsPage";
 import InventoryPage from "../pages/InventoryPage";
 import OrdersPage from "../pages/OrdersPage";
 import PlaceholderPage from "../pages/PlaceholderPage";
@@ -18,7 +19,7 @@ export default function AppRoutes() {
         <Route path="customers" element={<CustomersPage />} />
         <Route path="orders" element={<OrdersPage />} />
         <Route path="shipments" element={<ShipmentsPage />} />
-        <Route path="incidents" element={<PlaceholderPage title="Incidents" description="Incident reporting and incident status handling will be implemented in the next frontend step." />} />
+        <Route path="incidents" element={<IncidentsPage />} />
         <Route path="audit-logs" element={<PlaceholderPage title="Audit Logs" description="Audit log viewing will be connected after authentication and roles are added." />} />
       </Route>
 

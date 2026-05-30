@@ -50,6 +50,9 @@ public class IncidentService : IIncidentService
             Id = Guid.NewGuid(),
             Title = request.Title.Trim(),
             Description = request.Description.Trim(),
+            Severity = ParseSeverity(request.Severity),
+            RelatedEntityType = ParseRelatedEntityType(request.RelatedEntityType),
+            RelatedEntityId = request.RelatedEntityId.Trim(),
             Status = IncidentStatus.Open,
             CreatedAt = DateTime.UtcNow
         };
@@ -127,6 +130,11 @@ public class IncidentService : IIncidentService
         {
             throw new ArgumentException("Incident description is required.");
         }
+
+        if (request.RelatedEntityId.Length > 100)
+        {
+            throw new ArgumentException("Related entity id cannot be longer than 100 characters.");
+        }
     }
 
     private static void ValidateResolveRequest(ResolveIncidentRequest request)
@@ -154,6 +162,43 @@ public class IncidentService : IIncidentService
         return incidentStatus;
     }
 
+    private static IncidentSeverity ParseSeverity(string severity)
+    {
+        if (string.IsNullOrWhiteSpace(severity))
+        {
+            return IncidentSeverity.Medium;
+        }
+
+        var parsed = Enum.TryParse<IncidentSeverity>(severity.Trim(), true, out var incidentSeverity);
+
+        if (!parsed)
+        {
+            throw new ArgumentException("Incident severity is invalid. Valid severities are Low, Medium, High and Critical.");
+        }
+
+        return incidentSeverity;
+    }
+
+    private static IncidentRelatedEntityType ParseRelatedEntityType(string relatedEntityType)
+    {
+        if (string.IsNullOrWhiteSpace(relatedEntityType))
+        {
+            return IncidentRelatedEntityType.General;
+        }
+
+        var parsed = Enum.TryParse<IncidentRelatedEntityType>(
+            relatedEntityType.Trim(),
+            true,
+            out var parsedRelatedEntityType);
+
+        if (!parsed)
+        {
+            throw new ArgumentException("Related entity type is invalid. Valid types are General, Product, Inventory, Customer, Order and Shipment.");
+        }
+
+        return parsedRelatedEntityType;
+    }
+
     private static bool IsValidStatusChange(IncidentStatus currentStatus, IncidentStatus newStatus)
     {
         if (currentStatus == newStatus)
@@ -178,6 +223,9 @@ public class IncidentService : IIncidentService
             Id = incident.Id,
             Title = incident.Title,
             Description = incident.Description,
+            Severity = incident.Severity.ToString(),
+            RelatedEntityType = incident.RelatedEntityType.ToString(),
+            RelatedEntityId = incident.RelatedEntityId,
             Status = incident.Status.ToString(),
             ResolutionNotes = incident.ResolutionNotes,
             ClosedAt = incident.ClosedAt,

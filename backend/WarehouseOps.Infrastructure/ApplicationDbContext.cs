@@ -1,4 +1,4 @@
-using Microsoft.EntityFrameworkCore;
+﻿using Microsoft.EntityFrameworkCore;
 using WarehouseOps.Domain;
 
 namespace WarehouseOps.Infrastructure;
@@ -41,5 +41,17 @@ public class ApplicationDbContext : DbContext
         modelBuilder.Entity<OrderItem>()
             .Property(orderItem => orderItem.UnitPrice)
             .HasPrecision(18, 2);
+
+        modelBuilder.Entity<Incident>()
+            .Property(incident => incident.Severity)
+            .HasDefaultValue(IncidentSeverity.Medium);
+
+        modelBuilder.Entity<Incident>()
+            .Property(incident => incident.RelatedEntityType)
+            .HasDefaultValue(IncidentRelatedEntityType.General);
+
+        modelBuilder.Entity<Incident>()
+            .Property(incident => incident.RelatedEntityId)
+            .HasMaxLength(100);
     }
 }
