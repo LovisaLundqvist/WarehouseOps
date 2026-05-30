@@ -5,12 +5,20 @@ import {
   CalendarCheck,
   Clock,
   PackageCheck,
+  Plus,
   Route,
   Settings,
   Truck,
   X,
 } from "lucide-react";
-import { getShipments, updateShipmentStatus } from "../api/shipmentsApi";
+import { z } from "zod";
+import { getOrders } from "../api/ordersApi";
+import {
+  createShipment,
+  getShipments,
+  updateShipmentStatus,
+} from "../api/shipmentsApi";
+import type { Order } from "../types/order";
 import type { Shipment } from "../types/shipment";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
@@ -22,6 +30,18 @@ const shipmentStatuses = [
   "Delayed",
   "Cancelled",
 ];
+
+const createShipmentSchema = z.object({
+  orderId: z.string().trim().min(1, "Order is required."),
+  trackingNumber: z.string().trim().min(1, "Tracking number is required."),
+});
+
+type CreateShipmentFormValues = z.infer<typeof createShipmentSchema>;
+
+const initialCreateShipmentFormValues: CreateShipmentFormValues = {
+  orderId: "",
+  trackingNumber: "",
+};
 
 function getStatusBadgeClass(status: string) {
   switch (status) {
@@ -62,12 +82,42 @@ function canUpdateShipment(shipment: Shipment) {
   return shipment.status !== "Delivered" && shipment.status !== "Cancelled";
 }
 
+function getOrdersWithoutShipment(orders: Order[], shipments: Shipment[]) {
+  const orderIdsWithShipment = new Set(shipments.map((shipment) => shipment.orderId));
+
+  return orders.filter(
+    (order) =>
+      order.status !== "Cancelled" &&
+      !orderIdsWithShipment.has(order.id),
+  );
+}
+
+function mapValidationErrors(error: z.ZodError<CreateShipmentFormValues>) {
+  const validationErrors: Record<string, string> = {};
+
+  error.issues.forEach((issue) => {
+    const path = issue.path.join(".");
+
+    if (path) {
+      validationErrors[path] = issue.message;
+    }
+  });
+
+  return validationErrors;
+}
+
 export default function ShipmentsPage() {
   const queryClient = useQueryClient();
 
   const [selectedShipment, setSelectedShipment] = useState<Shipment | null>(null);
   const [selectedStatus, setSelectedStatus] = useState("");
   const [successMessage, setSuccessMessage] = useState("");
+  const [createShipmentForm, setCreateShipmentForm] = useState<CreateShipmentFormValues>(
+    initialCreateShipmentFormValues,
+  );
+  const [createShipmentValidationErrors, setCreateShipmentValidationErrors] = useState<
+    Record<string, string>
+  >({});
 
   const {
     data: shipments = [],
@@ -77,6 +127,29 @@ export default function ShipmentsPage() {
   } = useQuery({
     queryKey: ["shipments"],
     queryFn: getShipments,
+  });
+
+  const {
+    data: orders = [],
+    isLoading: isLoadingOrders,
+    isError: isOrdersError,
+    error: ordersError,
+  } = useQuery({
+    queryKey: ["orders", "shipment-form"],
+    queryFn: getOrders,
+  });
+
+  const createShipmentMutation = useMutation({
+    mutationFn: createShipment,
+    onSuccess: (createdShipment) => {
+      setSuccessMessage(`Shipment was created with tracking number ${createdShipment.trackingNumber}.`);
+      setCreateShipmentForm(initialCreateShipmentFormValues);
+      setCreateShipmentValidationErrors({});
+      setSelectedShipment(createdShipment);
+      setSelectedStatus(createdShipment.status);
+      queryClient.invalidateQueries({ queryKey: ["shipments"] });
+      queryClient.invalidateQueries({ queryKey: ["orders"] });
+    },
   });
 
   const updateStatusMutation = useMutation({
@@ -98,15 +171,29 @@ export default function ShipmentsPage() {
     (shipment) => shipment.status === "Delayed",
   ).length;
 
+  const availableOrders = getOrdersWithoutShipment(orders, shipments);
+
   const errorMessage = getApiErrorMessage(error, "Could not load shipments.");
+
+  const ordersErrorMessage = getApiErrorMessage(
+    ordersError,
+    "Could not load orders for the shipment form.",
+  );
+
+  const createShipmentErrorMessage = getApiErrorMessage(
+    createShipmentMutation.error,
+    "Could not create shipment.",
+  );
 
   const updateErrorMessage = getApiErrorMessage(
     updateStatusMutation.error,
     "Could not update shipment status.",
   );
 
+
   function handleSelectShipment(shipment: Shipment) {
     setSuccessMessage("");
+    createShipmentMutation.reset();
     updateStatusMutation.reset();
 
     setSelectedShipment(shipment);
@@ -123,12 +210,43 @@ export default function ShipmentsPage() {
     setSelectedStatus("");
   }
 
+  function handleCreateShipmentOrderChange(orderId: string) {
+    setCreateShipmentForm((current) => ({
+      ...current,
+      orderId,
+    }));
+  }
+
+  function handleCreateShipmentTrackingNumberChange(trackingNumber: string) {
+    setCreateShipmentForm((current) => ({
+      ...current,
+      trackingNumber,
+    }));
+  }
+
+  function handleCreateShipmentSubmit() {
+    setSuccessMessage("");
+    createShipmentMutation.reset();
+    updateStatusMutation.reset();
+
+    const result = createShipmentSchema.safeParse(createShipmentForm);
+
+    if (!result.success) {
+      setCreateShipmentValidationErrors(mapValidationErrors(result.error));
+      return;
+    }
+
+    setCreateShipmentValidationErrors({});
+    createShipmentMutation.mutate(result.data);
+  }
+
   function handleUpdateStatus() {
     if (!selectedShipment || !selectedStatus) {
       return;
     }
 
     setSuccessMessage("");
+    createShipmentMutation.reset();
     updateStatusMutation.reset();
 
     updateStatusMutation.mutate({
@@ -153,7 +271,7 @@ export default function ShipmentsPage() {
           </div>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500">
-            View shipments, tracking numbers, delivery status and update shipment progress when business rules allow it.
+            Create shipments from customer orders, track delivery progress and update shipment status when business rules allow it.
           </p>
         </div>
 
@@ -172,6 +290,112 @@ export default function ShipmentsPage() {
             <p className="text-sm font-medium text-amber-700">Delayed</p>
             <p className="mt-1 text-2xl font-bold text-amber-700">{delayedShipmentsCount}</p>
           </div>
+        </div>
+      </section>
+
+      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+        <div className="mb-5 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
+              <Plus size={20} />
+            </div>
+
+            <div>
+              <h3 className="text-base font-semibold text-slate-950">Create shipment</h3>
+              <p className="mt-1 text-sm text-slate-500">
+                Select an order without an existing shipment and enter a tracking number.
+              </p>
+            </div>
+          </div>
+
+          <div className="rounded-2xl bg-slate-50 px-5 py-4">
+            <p className="text-sm font-medium text-slate-500">Available orders</p>
+            <p className="mt-1 text-2xl font-bold text-slate-950">{availableOrders.length}</p>
+          </div>
+        </div>
+
+        {isOrdersError && (
+          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+            <div className="flex gap-2">
+              <AlertTriangle size={18} />
+              <span>{ordersErrorMessage}</span>
+            </div>
+          </div>
+        )}
+
+        <div className="grid gap-4 lg:grid-cols-[1.4fr_1fr_auto] lg:items-start">
+          <div>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Order</span>
+              <select
+                value={createShipmentForm.orderId}
+                onChange={(event) => handleCreateShipmentOrderChange(event.target.value)}
+                disabled={isLoadingOrders || isOrdersError || availableOrders.length === 0}
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+              >
+                <option value="">Select order</option>
+                {availableOrders.map((order) => (
+                  <option key={order.id} value={order.id}>
+                    {order.customerName} | {order.status} | {order.id}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {createShipmentValidationErrors.orderId && (
+              <p className="mt-2 text-sm text-red-600">
+                {createShipmentValidationErrors.orderId}
+              </p>
+            )}
+
+            {!isLoadingOrders && !isOrdersError && availableOrders.length === 0 && (
+              <p className="mt-2 text-sm text-amber-700">
+                There are no available orders. Cancelled orders and orders that already have shipments are excluded.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Tracking number</span>
+              <input
+                type="text"
+                value={createShipmentForm.trackingNumber}
+                onChange={(event) => handleCreateShipmentTrackingNumberChange(event.target.value)}
+                placeholder="Example: WH-TRK-1001"
+                className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+
+            {createShipmentValidationErrors.trackingNumber && (
+              <p className="mt-2 text-sm text-red-600">
+                {createShipmentValidationErrors.trackingNumber}
+              </p>
+            )}
+          </div>
+
+          <button
+            type="button"
+            onClick={handleCreateShipmentSubmit}
+            disabled={
+              createShipmentMutation.isPending ||
+              isLoadingOrders ||
+              isOrdersError ||
+              availableOrders.length === 0
+            }
+            className="mt-7 rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+          >
+            {createShipmentMutation.isPending ? "Creating..." : "Create shipment"}
+          </button>
+
+          {createShipmentMutation.isError && (
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-3">
+              <div className="flex gap-2">
+                <AlertTriangle size={18} />
+                <span>{createShipmentErrorMessage}</span>
+              </div>
+            </div>
+          )}
         </div>
       </section>
 
@@ -288,7 +512,7 @@ export default function ShipmentsPage() {
           <div>
             <h3 className="text-base font-semibold text-slate-950">Shipment overview</h3>
             <p className="mt-1 text-sm text-slate-500">
-              Status transitions are validated by the ASP.NET Core backend.
+              Status transitions and shipment creation are validated by the ASP.NET Core backend.
             </p>
           </div>
         </div>

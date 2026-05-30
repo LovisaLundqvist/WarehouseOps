@@ -11,6 +11,11 @@
   updatedAt: string | null;
 };
 
+export type CreateShipmentRequest = {
+  orderId: string;
+  trackingNumber: string;
+};
+
 export type UpdateShipmentStatusRequest = {
   status: string;
 };

@@ -1,8 +1,18 @@
 ﻿import apiClient from "./apiClient";
-import type { Shipment, UpdateShipmentStatusRequest } from "../types/shipment";
+import type {
+  CreateShipmentRequest,
+  Shipment,
+  UpdateShipmentStatusRequest,
+} from "../types/shipment";
 
 export async function getShipments(): Promise<Shipment[]> {
   const response = await apiClient.get<Shipment[]>("/Shipments");
+
+  return response.data;
+}
+
+export async function createShipment(request: CreateShipmentRequest): Promise<Shipment> {
+  const response = await apiClient.post<Shipment>("/Shipments", request);
 
   return response.data;
 }
