@@ -1,299 +1,443 @@
-﻿# Database Design
+# Database Design
 
-## Overview
+This document describes the database design for WarehouseOps.
 
-WarehouseOps uses SQL Server with Entity Framework Core.
+WarehouseOps uses SQL Server with Entity Framework Core. The database supports a B2B technology warehouse scenario with products, inventory, customers, orders, shipments, incidents and audit logs.
 
-The database is created through EF Core migrations.
+## Database technology
 
-Local database name:
+The project uses:
 
-```text
-WarehouseOpsDb
-```
+* SQL Server
+* Entity Framework Core
+* EF Core migrations
+* Repository pattern
 
-Local connection string:
+The database context is located in:
 
-```json
-{
-  "ConnectionStrings": {
-    "DefaultConnection": "Server=(localdb)\\MSSQLLocalDB;Database=WarehouseOpsDb;Trusted_Connection=True;MultipleActiveResultSets=true"
-  }
-}
-```
+backend/WarehouseOps.Infrastructure/ApplicationDbContext.cs
 
 ## Main tables
 
-The current database contains these main tables:
+The main database tables are:
 
-1. Products
-2. InventoryItems
-3. Customers
-4. Orders
-5. OrderItems
-6. Shipments
-7. Incidents
-8. AuditLogs
-
-## Shared fields
-
-Most domain entities inherit from `BaseEntity`.
-
-Common fields:
-
-```text
-Id
-CreatedAt
-UpdatedAt
-```
-
-`UpdatedAt` is nullable and is set when an entity is changed.
+* Products
+* InventoryItems
+* Customers
+* Orders
+* OrderItems
+* Shipments
+* Incidents
+* AuditLogs
 
 ## Products
 
-Represents a product in the warehouse catalog.
+The Products table stores product catalog information.
 
-Important fields:
+Example products in the demo seed data:
 
-```text
-Id
-Name
-Sku
-Category
-Description
-Price
-CreatedAt
-UpdatedAt
-```
+* ASUS ROG Zephyrus G14
+* Apple MacBook Pro 14 M4
+* Lenovo ThinkPad X1 Carbon
+* Samsung Odyssey monitor
+* Sony headphones
+* Logitech accessories
+* Ubiquiti networking hardware
+* Synology storage devices
 
-Rules:
+Main fields:
 
-1. SKU must be unique in application logic.
-2. Price cannot be negative.
-3. Product is connected to inventory through InventoryItem.
-4. Product is connected to orders through OrderItem.
+* Id
+* Name
+* Sku
+* Category
+* Description
+* Price
+* CreatedAt
+* UpdatedAt
+
+Business rules:
+
+* Product name is required.
+* SKU is required.
+* Category is required.
+* Price cannot be negative.
+* SKU should be unique.
+* Products used in inventory or order history cannot be deleted.
+
+Relationships:
+
+* One product can have one inventory item.
+* One product can appear in many order items.
 
 ## InventoryItems
 
-Represents stock information for a product.
+The InventoryItems table stores warehouse stock levels.
 
-Important fields:
+Main fields:
 
-```text
-Id
-ProductId
-QuantityInStock
-MinimumStockLevel
-CreatedAt
-UpdatedAt
-```
+* Id
+* ProductId
+* QuantityInStock
+* MinimumStockLevel
+* CreatedAt
+* UpdatedAt
 
-Relationship:
+Business rules:
 
-```text
-InventoryItem -> Product
-```
+* ProductId is required.
+* QuantityInStock cannot be negative.
+* MinimumStockLevel cannot be negative.
+* A product can only have one inventory item.
+* Low stock is detected when quantity is at or below the minimum stock level.
 
-Rules:
+Relationships:
 
-1. Product must exist.
-2. One product should only have one inventory item.
-3. Quantity cannot be negative.
-4. Minimum stock level cannot be negative.
-5. Low stock is calculated when QuantityInStock is less than or equal to MinimumStockLevel.
+* Each inventory item belongs to one product.
 
 ## Customers
 
-Represents a customer that can place orders.
+The Customers table stores B2B customer information.
 
-Important fields:
+Example customers in the demo seed data:
 
-```text
-Id
-Name
-Email
-PhoneNumber
-Address
-CreatedAt
-UpdatedAt
-```
+* Elgiganten Sverige AB
+* Power Sverige AB
+* Inet AB
+* Dustin Sverige AB
 
-Relationship:
+Main fields:
 
-```text
-Customer -> Orders
-```
+* Id
+* Name
+* Email
+* PhoneNumber
+* Address
+* CreatedAt
+* UpdatedAt
 
-Rules:
+Business rules:
 
-1. Email must be unique in application logic.
-2. Email must contain @.
-3. Name is required.
+* Customer name is required.
+* Customer email is required.
+* Customers can be connected to orders.
+
+Relationships:
+
+* One customer can have many orders.
 
 ## Orders
 
-Represents a customer order.
+The Orders table stores customer orders.
 
-Important fields:
+Main fields:
 
-```text
-Id
-CustomerId
-Status
-TotalAmount
-CreatedAt
-UpdatedAt
-```
+* Id
+* CustomerId
+* Status
+* TotalAmount
+* CreatedAt
+* UpdatedAt
+
+Order status values:
+
+* Pending
+* Processing
+* Packed
+* Shipped
+* Cancelled
+* Completed
+
+Business rules:
+
+* CustomerId is required.
+* An order must contain at least one order item.
+* Order status changes must follow valid business rules.
+* Shipped and completed orders cannot be cancelled.
+* Cancelling an order returns items to inventory.
 
 Relationships:
 
-```text
-Order -> Customer
-Order -> OrderItems
-Order -> Shipment
-```
-
-Rules:
-
-1. Customer must exist.
-2. Order must contain at least one order item.
-3. TotalAmount is calculated from order items.
-4. Creating an order reduces inventory quantity.
-5. Status changes are controlled in the application layer.
+* Each order belongs to one customer.
+* Each order has many order items.
+* Each order can have one shipment.
 
 ## OrderItems
 
-Represents one product row in an order.
+The OrderItems table stores products included in an order.
 
-Important fields:
+Main fields:
 
-```text
-Id
-OrderId
-ProductId
-Quantity
-UnitPrice
-CreatedAt
-UpdatedAt
-```
+* Id
+* OrderId
+* ProductId
+* Quantity
+* UnitPrice
+* CreatedAt
+* UpdatedAt
+
+Business rules:
+
+* OrderId is required.
+* ProductId is required.
+* Quantity must be greater than zero.
+* Product must exist in inventory before it can be ordered.
+* The same product cannot be added more than once to the same order.
+* Order quantity cannot exceed available stock.
 
 Relationships:
 
-```text
-OrderItem -> Order
-OrderItem -> Product
-```
-
-Rules:
-
-1. Product must exist.
-2. Quantity must be greater than zero.
-3. UnitPrice is copied from Product.Price when the order is created.
+* Each order item belongs to one order.
+* Each order item belongs to one product.
 
 ## Shipments
 
-Represents a shipment connected to an order.
+The Shipments table stores delivery information for orders.
 
-Important fields:
+Main fields:
 
-```text
-Id
-OrderId
-Status
-TrackingNumber
-ShippedDate
-DeliveredDate
-CreatedAt
-UpdatedAt
-```
+* Id
+* OrderId
+* Status
+* TrackingNumber
+* ShippedDate
+* DeliveredDate
+* CreatedAt
+* UpdatedAt
 
-Relationship:
+Shipment status values:
 
-```text
-Shipment -> Order
-```
+* Pending
+* Packed
+* Shipped
+* Delivered
+* Delayed
+* Cancelled
 
-Rules:
+Business rules:
 
-1. Order must exist.
-2. Tracking number is required.
-3. A shipment cannot be created for a cancelled order.
-4. One order can only have one shipment in application logic.
-5. ShippedDate is set when shipment status becomes Shipped.
-6. DeliveredDate is set when shipment status becomes Delivered.
+* OrderId is required.
+* TrackingNumber is required.
+* Cancelled orders cannot receive shipments.
+* An order can only have one shipment.
+* Delivered and cancelled shipments cannot be changed.
+* DeliveredDate is set when shipment status becomes Delivered.
+
+Relationships:
+
+* Each shipment belongs to one order.
 
 ## Incidents
 
-Represents an operational incident.
+The Incidents table stores operational problems and follow up work.
 
-Important fields:
+Main fields:
 
-```text
-Id
-Title
-Description
-Status
-ResolutionNotes
-ClosedAt
-CreatedAt
-UpdatedAt
-```
+* Id
+* Title
+* Description
+* Severity
+* RelatedEntityType
+* RelatedEntityId
+* Status
+* ResolutionNotes
+* ClosedAt
+* CreatedAt
+* UpdatedAt
 
-Rules:
+Incident severity values:
 
-1. Title is required.
-2. Description is required.
-3. New incidents start as Open.
-4. Resolution notes are required when resolving an incident.
-5. ClosedAt is set when the incident is closed.
+* Low
+* Medium
+* High
+* Critical
+
+Incident status values:
+
+* Open
+* InProgress
+* Resolved
+* Closed
+
+Related entity type values:
+
+* General
+* Product
+* Inventory
+* Customer
+* Order
+* Shipment
+
+Business rules:
+
+* Title is required.
+* Description is required.
+* Severity must be valid.
+* Related entity type must be valid.
+* Closed incidents cannot be reopened.
+* Resolution notes are required when closing an incident.
+
+Relationships:
+
+* Incidents can reference different business areas through RelatedEntityType and RelatedEntityId.
+* This is intentionally flexible because incidents can relate to products, inventory, customers, orders or shipments.
 
 ## AuditLogs
 
-Represents important changes in the system.
+The AuditLogs table stores change history for important business actions.
 
-Important fields:
+Main fields:
 
-```text
-Id
-EntityName
-Action
-PerformedBy
-PerformedAt
-Changes
-CreatedAt
-UpdatedAt
-```
+* Id
+* EntityName
+* Action
+* PerformedBy
+* PerformedAt
+* Changes
+* CreatedAt
+* UpdatedAt
 
-Current implementation logs:
+Audit logs are created for actions such as:
 
-1. Product created
-2. Product updated
-3. Product deleted
+* Product created
+* Product updated
+* Product deleted
+* Inventory created
+* Inventory updated
+* Customer created
+* Customer updated
+* Order created
+* Order status updated
+* Order cancelled
+* Shipment created
+* Shipment status updated
+* Incident created
+* Incident status updated
+* Incident closed
 
-Future implementation should also log:
+Business rules:
 
-1. Order created
-2. Order status changed
-3. Shipment created
-4. Shipment status changed
-5. Incident created
-6. Incident closed
-7. Admin actions
+* Important changes should create audit log entries.
+* Audit logs should show who performed the action.
+* Audit log access is limited to Admin and Manager.
 
-## Decimal precision
+## Relationship summary
 
-The database configuration sets decimal precision for money related fields:
+Product relationships:
 
-```text
-Product.Price
-Order.TotalAmount
-OrderItem.UnitPrice
-```
+* Product to InventoryItem: one to one
+* Product to OrderItem: one to many
 
-Precision:
+Customer relationships:
 
-```text
-18, 2
-```
+* Customer to Order: one to many
 
-This avoids unsafe default decimal mapping in SQL Server.
+Order relationships:
+
+* Order to OrderItem: one to many
+* Order to Shipment: one to one
+
+Shipment relationships:
+
+* Shipment to Order: many to one from shipment perspective
+
+Incident relationships:
+
+* Incident uses flexible reference fields instead of direct foreign keys.
+
+AuditLog relationships:
+
+* AuditLog stores historical change information and is not dependent on a direct foreign key to one specific entity type.
+
+## Demo seed data
+
+The Docker setup includes demo seed data.
+
+Seed data is located in:
+
+backend/WarehouseOps.Infrastructure/DatabaseSeeder.cs
+
+The seed data creates:
+
+* Products
+* Inventory items
+* Customers
+* Orders
+* Order items
+* Shipments
+* Incidents
+* Audit logs
+
+Seed data is enabled in Docker Compose with:
+
+Database__SeedDemoData=true
+
+Seed data only runs when the database has no products.
+
+## Docker database
+
+Docker Compose runs SQL Server in a container.
+
+The SQL Server service is named:
+
+sqlserver
+
+The backend connects to SQL Server through the internal Docker network.
+
+SQL Server is not exposed to the host machine.
+
+This means the database is reachable by the backend container, but not opened directly on localhost from Windows.
+
+## Local database
+
+When running locally without Docker, the project can use SQL Server LocalDB.
+
+The connection string is stored in appsettings.json for local development.
+
+The JWT secret is not stored in appsettings.json. It is stored through user secrets locally or environment variables in Docker.
+
+## EF Core migrations
+
+Entity Framework Core migrations are used to create and update the database schema.
+
+The migrations are located in the Infrastructure project.
+
+To update the local database manually:
+
+cd backend
+dotnet ef database update --project WarehouseOps.Infrastructure --startup-project WarehouseOps.Api
+
+In Docker, migrations can be applied automatically when this setting is enabled:
+
+Database__AutoMigrate=true
+
+## Current database improvement ideas
+
+The current database design works for the portfolio version.
+
+Possible future improvements:
+
+* Add unique database index for Product.Sku.
+* Add unique database index for Customer.Email.
+* Add unique database index for InventoryItem.ProductId.
+* Add unique database index for Shipment.OrderId.
+* Add stronger length constraints for important text fields.
+* Add integration tests for database behavior.
+* Add more realistic audit log metadata.
+* Add supplier and purchasing tables.
+* Add returns handling.
+* Add multi warehouse support.
+
+## Summary
+
+The database design supports the main WarehouseOps workflow:
+
+* Products are imported and stored in the product catalog.
+* Inventory tracks stock levels for products.
+* Customers place B2B orders.
+* Orders reserve stock and contain order items.
+* Shipments track deliveries.
+* Incidents track operational problems.
+* Audit logs track important business changes.
+
+The design is intentionally clear and focused on warehouse operations rather than a full ERP system.
