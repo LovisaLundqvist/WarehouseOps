@@ -1,4 +1,4 @@
-﻿using WarehouseOps.Domain;
+using WarehouseOps.Domain;
 
 namespace WarehouseOps.Application.Interfaces;
 

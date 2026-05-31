@@ -1,4 +1,4 @@
-﻿using WarehouseOps.Application.Dtos;
+using WarehouseOps.Application.Dtos;
 
 namespace WarehouseOps.Application.Interfaces;
 

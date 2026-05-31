@@ -1,4 +1,4 @@
-﻿export type Incident = {
+export type Incident = {
   id: string;
   title: string;
   description: string;

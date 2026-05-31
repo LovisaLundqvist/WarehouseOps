@@ -1,4 +1,4 @@
-﻿export function formatShortId(id: string | null | undefined, prefix: string) {
+export function formatShortId(id: string | null | undefined, prefix: string) {
   if (!id) {
     return `${prefix} #UNKNOWN`;
   }

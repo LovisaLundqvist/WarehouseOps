@@ -1,4 +1,4 @@
-﻿export type Shipment = {
+export type Shipment = {
   id: string;
   orderId: string;
   orderStatus: string;

@@ -1,4 +1,4 @@
-﻿import axios from "axios";
+import axios from "axios";
 import { getStoredAuthState } from "../auth/authStorage";
 
 const apiClient = axios.create({

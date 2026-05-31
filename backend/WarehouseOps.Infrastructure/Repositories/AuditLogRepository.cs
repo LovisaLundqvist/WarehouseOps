@@ -1,4 +1,4 @@
-﻿using Microsoft.EntityFrameworkCore;
+using Microsoft.EntityFrameworkCore;
 using WarehouseOps.Application.Interfaces;
 using WarehouseOps.Domain;
 

@@ -1,4 +1,4 @@
-﻿export type InventoryItem = {
+export type InventoryItem = {
   id: string;
   productId: string;
   productName: string;

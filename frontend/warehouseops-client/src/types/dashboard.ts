@@ -1,4 +1,4 @@
-﻿export type DashboardStatusCount = {
+export type DashboardStatusCount = {
   status: string;
   count: number;
 };

@@ -1,4 +1,4 @@
-﻿import apiClient from "./apiClient";
+import apiClient from "./apiClient";
 import type { CreateOrderRequest, Order, UpdateOrderStatusRequest } from "../types/order";
 
 export async function getOrders(): Promise<Order[]> {

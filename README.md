@@ -107,6 +107,7 @@ The goal of the project is to demonstrate practical skills in .NET, React, SQL S
 ### Docker Compose
 
 ![Docker Compose](docs/screenshots/docker-compose.png)
+
 ## Business scenario
 
 WarehouseOps is designed around a fictional technology import company.

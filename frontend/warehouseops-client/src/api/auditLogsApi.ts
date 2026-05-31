@@ -1,4 +1,4 @@
-﻿import apiClient from "./apiClient";
+import apiClient from "./apiClient";
 import type { AuditLog } from "../types/auditLog";
 
 export async function getAuditLogs(): Promise<AuditLog[]> {

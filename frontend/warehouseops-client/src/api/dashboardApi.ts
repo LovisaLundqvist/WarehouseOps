@@ -1,4 +1,4 @@
-﻿import apiClient from "./apiClient";
+import apiClient from "./apiClient";
 import type { DashboardSummary } from "../types/dashboard";
 
 export async function getDashboardSummary(): Promise<DashboardSummary> {

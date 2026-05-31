@@ -1,4 +1,4 @@
-﻿namespace WarehouseOps.Application.Interfaces;
+namespace WarehouseOps.Application.Interfaces;
 
 public interface ICurrentUserService
 {

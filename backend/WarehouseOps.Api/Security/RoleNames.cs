@@ -1,4 +1,4 @@
-﻿namespace WarehouseOps.Api.Security;
+namespace WarehouseOps.Api.Security;
 
 public static class RoleNames
 {

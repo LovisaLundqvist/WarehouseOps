@@ -1,4 +1,4 @@
-﻿using FluentAssertions;
+using FluentAssertions;
 using Moq;
 using WarehouseOps.Application.Dtos;
 using WarehouseOps.Application.Interfaces;

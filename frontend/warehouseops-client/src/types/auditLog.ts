@@ -1,4 +1,4 @@
-﻿export type AuditLog = {
+export type AuditLog = {
   id: string;
   entityName: string;
   action: string;

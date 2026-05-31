@@ -1,4 +1,4 @@
-﻿name: WarehouseOps CI
+name: WarehouseOps CI
 
 on:
   push:

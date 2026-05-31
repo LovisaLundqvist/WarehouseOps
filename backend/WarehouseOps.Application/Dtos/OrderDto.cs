@@ -1,4 +1,4 @@
-﻿namespace WarehouseOps.Application.Dtos;
+namespace WarehouseOps.Application.Dtos;
 
 public class OrderDto
 {

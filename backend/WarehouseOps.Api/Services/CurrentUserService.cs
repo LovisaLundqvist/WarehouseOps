@@ -1,4 +1,4 @@
-﻿using System.Security.Claims;
+using System.Security.Claims;
 using WarehouseOps.Application.Interfaces;
 
 namespace WarehouseOps.Api.Services;

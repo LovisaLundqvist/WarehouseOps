@@ -1,4 +1,4 @@
-﻿namespace WarehouseOps.Domain;
+namespace WarehouseOps.Domain;
 
 public enum IncidentRelatedEntityType
 {

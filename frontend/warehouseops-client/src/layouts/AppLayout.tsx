@@ -1,4 +1,4 @@
-﻿import { LogOut } from "lucide-react";
+import { LogOut } from "lucide-react";
 import { Outlet } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import Sidebar from "../components/Sidebar";
