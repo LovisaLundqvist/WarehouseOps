@@ -363,5 +363,5 @@ The project should be realistic enough to represent a warehouse operations modul
 | GitHub Actions CI | Implemented |
 | Docker Compose | Implemented |
 | Demo seed data | Implemented |
-| Full docs | In progress |
-| Screenshots | Planned |
+| Full docs | Implemented |
+| Screenshots | Implemented |

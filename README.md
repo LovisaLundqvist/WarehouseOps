@@ -607,7 +607,6 @@ Implemented:
 Remaining improvements:
 
 * Update all documentation files in `docs/`
-* Add screenshots to README
 * Add more integration tests
 * Optionally add Docker build validation to GitHub Actions
 * Optionally add stricter database uniqueness constraints
