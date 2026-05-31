@@ -1,431 +1,490 @@
-﻿# Sprint Logs
+# Sprint Logs
 
-## Sprint 1: Project setup and backend foundation
+This document summarizes the development work completed for WarehouseOps.
 
-### Sprint goal
+The project was built step by step to keep the scope controlled and to make sure each part worked before moving to the next one.
 
-Create the basic project structure and backend foundation for WarehouseOps.
+## Project goal
 
-### Planned work
+WarehouseOps is a fullstack warehouse operations system for a fictional B2B technology import company.
 
-1. Create repository structure.
-2. Create backend solution.
-3. Create Api, Application, Domain, Infrastructure and Tests projects.
-4. Create documentation folder.
-5. Add initial markdown documentation files.
-6. Configure Git and GitHub.
+The project goal is to demonstrate skills in:
 
-### Completed work
+* ASP.NET Core Web API
+* C#
+* Entity Framework Core
+* SQL Server
+* React
+* TypeScript
+* Authentication
+* Role based authorization
+* Testing
+* Docker
+* GitHub Actions
+* Security aware development
 
-1. Created the WarehouseOps folder structure.
-2. Created the backend solution.
-3. Added the following backend projects:
-   1. WarehouseOps.Api
-   2. WarehouseOps.Application
-   3. WarehouseOps.Domain
-   4. WarehouseOps.Infrastructure
-   5. WarehouseOps.Tests
-4. Added docs folder.
-5. Added initial documentation files.
-6. Added .gitignore.
-7. Pushed project to GitHub.
+## Sprint 1: Project structure and backend foundation
 
-### Problems
+### Goal
 
-1. Git was not installed at first.
-2. bin and obj folders were accidentally tracked by Git.
-3. Empty frontend folder was not tracked because Git does not track empty folders.
-
-### Solutions
-
-1. Installed Git.
-2. Removed bin and obj from Git tracking.
-3. Added bin, obj and .vs to .gitignore.
-
-### Result
-
-Sprint 1 was completed.
-
-## Sprint 2: Domain model and database setup
-
-### Sprint goal
-
-Create the domain model and configure Entity Framework Core with SQL Server LocalDB.
-
-### Planned work
-
-1. Create domain entities.
-2. Create enums.
-3. Configure ApplicationDbContext.
-4. Add EF Core packages.
-5. Add initial migration.
-6. Create database.
+Create the basic repository structure and backend solution.
 
 ### Completed work
 
-1. Created BaseEntity.
-2. Created Product.
-3. Created InventoryItem.
-4. Created Customer.
-5. Created Order.
-6. Created OrderItem.
-7. Created Shipment.
-8. Created Incident.
-9. Created AuditLog.
-10. Created enums:
-    1. OrderStatus
-    2. ShipmentStatus
-    3. IncidentStatus
-    4. UserRole
-11. Configured ApplicationDbContext.
-12. Added DbSets for all main entities.
-13. Added decimal precision for:
-    1. Product.Price
-    2. Order.TotalAmount
-    3. OrderItem.UnitPrice
-14. Added EF Core migrations.
-15. Created local SQL Server database.
-
-### Problems
-
-1. EF Core warned about decimal precision.
-2. UpdatedAt was added after the first migration.
-3. Product.Category was added after the first migration.
-
-### Solutions
-
-1. Added HasPrecision(18, 2) for decimal fields.
-2. Created a second migration for Product.Category and UpdatedAt.
+* Created project root structure.
+* Created backend solution.
+* Created projects for Api, Application, Domain, Infrastructure and Tests.
+* Added project references between layers.
+* Verified that the solution builds.
 
 ### Result
 
-Sprint 2 was completed.
+The backend foundation was ready for domain modeling and API development.
 
-## Sprint 3: Product API
+## Sprint 2: Domain model
 
-### Sprint goal
+### Goal
 
-Create a complete Product API with clean layered architecture.
-
-### Planned work
-
-1. Create product DTOs.
-2. Create product interfaces.
-3. Create ProductService.
-4. Create ProductRepository.
-5. Create ProductsController.
-6. Register dependencies in Program.cs.
-7. Test API in Swagger.
+Create the core domain entities and enums.
 
 ### Completed work
 
-1. Created ProductDto.
-2. Created CreateProductRequest.
-3. Created UpdateProductRequest.
-4. Created IProductService.
-5. Created IProductRepository.
-6. Created ProductService.
-7. Created ProductRepository.
-8. Created ProductsController.
-9. Registered ProductService and ProductRepository in Program.cs.
-10. Tested endpoints in Swagger:
-    1. GET /api/Products
-    2. POST /api/Products
-    3. GET /api/Products/{id}
-    4. PUT /api/Products/{id}
-    5. DELETE /api/Products/{id}
-
-### Important rules implemented
-
-1. Product name is required.
-2. SKU is required.
-3. Category is required.
-4. Price cannot be negative.
-5. SKU must be unique.
-6. Search and category filtering are supported.
+* Created domain entities for products, inventory, customers, orders, shipments, incidents and audit logs.
+* Created enums for order status, shipment status, incident status, incident severity, related entity type and user roles.
+* Added shared base properties such as Id, CreatedAt and UpdatedAt.
 
 ### Result
 
-Product API was completed and pushed to GitHub.
+The domain layer contained the main business model for the warehouse system.
 
-## Sprint 4: Inventory API and Customer API
+## Sprint 3: Infrastructure and database
 
-### Sprint goal
+### Goal
 
-Create APIs for inventory and customers so that orders can be tested later.
-
-### Planned work
-
-1. Create Inventory API.
-2. Create Customer API.
-3. Test both APIs in Swagger.
-4. Push changes to GitHub.
+Set up Entity Framework Core and SQL Server persistence.
 
 ### Completed work
 
-Inventory API:
-
-1. Created InventoryItemDto.
-2. Created CreateInventoryItemRequest.
-3. Created UpdateInventoryItemRequest.
-4. Created IInventoryService.
-5. Created IInventoryRepository.
-6. Created InventoryService.
-7. Created InventoryRepository.
-8. Created InventoryController.
-9. Registered dependencies in Program.cs.
-10. Tested inventory endpoints in Swagger.
-
-Customer API:
-
-1. Created CustomerDto.
-2. Created CreateCustomerRequest.
-3. Created UpdateCustomerRequest.
-4. Created ICustomerService.
-5. Created ICustomerRepository.
-6. Created CustomerService.
-7. Created CustomerRepository.
-8. Created CustomersController.
-9. Registered dependencies in Program.cs.
-10. Tested customer endpoints in Swagger.
-
-### Important inventory rules implemented
-
-1. Product must exist before inventory can be created.
-2. One product can only have one inventory item.
-3. Quantity cannot be negative.
-4. Minimum stock level cannot be negative.
-5. Low stock endpoint returns products at or below minimum stock level.
-
-### Important customer rules implemented
-
-1. Name is required.
-2. Email is required.
-3. Email must contain @.
-4. Email must be unique.
-5. Customer search is supported.
-
-### Problems
-
-1. Customer API initially returned an error because ICustomerService was not registered in Program.cs.
-2. This was fixed by registering CustomerService and CustomerRepository.
+* Created ApplicationDbContext.
+* Added DbSets for all main entities.
+* Configured relationships between entities.
+* Added repository interfaces and repository implementations.
+* Added EF Core migrations.
+* Verified database creation locally.
 
 ### Result
 
-Inventory API and Customer API were completed and pushed to GitHub.
+The backend could persist and retrieve data through EF Core and SQL Server.
 
-## Sprint 5: Order API
+## Sprint 4: Product API
 
-### Sprint goal
+### Goal
 
-Create an Order API that connects customers, products and inventory.
-
-### Planned work
-
-1. Create order DTOs.
-2. Create order interfaces.
-3. Create OrderService.
-4. Create OrderRepository.
-5. Create OrdersController.
-6. Register dependencies in Program.cs.
-7. Test order creation and status changes in Swagger.
+Implement product management.
 
 ### Completed work
 
-1. Created OrderDto.
-2. Created OrderItemDto.
-3. Created CreateOrderRequest.
-4. Created CreateOrderItemRequest.
-5. Created UpdateOrderStatusRequest.
-6. Created IOrderService.
-7. Created IOrderRepository.
-8. Created OrderService.
-9. Created OrderRepository.
-10. Created OrdersController.
-11. Registered dependencies in Program.cs.
-12. Tested order creation in Swagger.
-13. Tested order status flow:
-    1. Pending
-    2. Processing
-    3. Packed
-    4. Shipped
-    5. Completed
-14. Verified that inventory quantity was reduced when an order was created.
-
-### Important rules implemented
-
-1. Customer must exist.
-2. Order must contain at least one order item.
-3. Product must exist.
-4. Inventory item must exist for the product.
-5. Quantity must be greater than zero.
-6. Stock must be available.
-7. The same product cannot appear twice in the same order.
-8. Creating an order reduces inventory quantity.
-9. Invalid status transitions are rejected.
-10. Completed or shipped orders cannot be cancelled.
+* Created product DTOs and request models.
+* Created ProductService.
+* Created ProductRepository.
+* Created ProductsController.
+* Added create, read, update, delete, search and category filtering.
+* Added business rules for required fields, unique SKU and delete protection when product is in use.
+* Added audit logging for product changes.
 
 ### Result
 
-Order API was completed and pushed to GitHub.
+Products could be managed through the API and later through the frontend.
 
-## Sprint 6: Shipment API and Incident API
+## Sprint 5: Inventory API
 
-### Sprint goal
+### Goal
 
-Create APIs for shipments and incidents.
-
-### Planned work
-
-1. Create Shipment API.
-2. Create Incident API.
-3. Test both APIs in Swagger.
-4. Push changes to GitHub.
+Implement inventory management.
 
 ### Completed work
 
-Shipment API:
-
-1. Created ShipmentDto.
-2. Created CreateShipmentRequest.
-3. Created UpdateShipmentStatusRequest.
-4. Created IShipmentService.
-5. Created IShipmentRepository.
-6. Created ShipmentService.
-7. Created ShipmentRepository.
-8. Created ShipmentsController.
-9. Registered dependencies in Program.cs.
-10. Tested shipment creation in Swagger.
-11. Tested status flow:
-    1. Pending
-    2. Packed
-    3. Shipped
-    4. Delivered
-12. Verified that ShippedDate is set when status becomes Shipped.
-13. Verified that DeliveredDate is set when status becomes Delivered.
-
-Incident API:
-
-1. Created IncidentDto.
-2. Created CreateIncidentRequest.
-3. Created UpdateIncidentStatusRequest.
-4. Created ResolveIncidentRequest.
-5. Created IIncidentService.
-6. Created IIncidentRepository.
-7. Created IncidentService.
-8. Created IncidentRepository.
-9. Created IncidentsController.
-10. Registered dependencies in Program.cs.
-11. Tested incident creation in Swagger.
-12. Tested status update to InProgress.
-13. Tested resolving incident with resolution notes.
-14. Verified that ClosedAt is set when incident is closed.
-
-### Important shipment rules implemented
-
-1. Order must exist.
-2. Tracking number is required.
-3. Shipment cannot be created for a cancelled order.
-4. One order can only have one shipment.
-5. Delivered can only be reached through the correct status flow.
-
-### Important incident rules implemented
-
-1. Title is required.
-2. Description is required.
-3. New incidents start as Open.
-4. Resolution notes are required when closing an incident.
-5. ClosedAt is set when incident is closed.
-6. Closed incidents cannot be resolved again.
-
-### Problems
-
-1. Shipment status test was first attempted on the Product endpoint by mistake.
-2. Incident API initially returned an error because IIncidentService was not registered in Program.cs.
-
-### Solutions
-
-1. Re-tested Shipment API on the correct endpoint.
-2. Registered IncidentService and IncidentRepository in Program.cs.
+* Created inventory DTOs and request models.
+* Created InventoryService.
+* Created InventoryRepository.
+* Created InventoryController.
+* Added ability to add products to inventory.
+* Added inventory updates.
+* Added low stock detection.
+* Added business rules for product existence, one inventory item per product and non negative stock values.
+* Added audit logging for inventory changes.
 
 ### Result
 
-Shipment API and Incident API were completed and pushed to GitHub.
+Warehouse stock levels could be tracked and updated.
 
-## Sprint 7: Audit Log and backend documentation
+## Sprint 6: Customer API
 
-### Sprint goal
+### Goal
 
-Add audit logging and update backend documentation before starting frontend development.
-
-### Planned work
-
-1. Create Audit Log API.
-2. Add audit logging to ProductService.
-3. Test audit log in Swagger.
-4. Update backend documentation.
-5. Push changes to GitHub.
+Implement customer management.
 
 ### Completed work
 
-Audit Log:
-
-1. Created AuditLogDto.
-2. Created IAuditLogService.
-3. Created IAuditLogRepository.
-4. Created AuditLogService.
-5. Created AuditLogRepository.
-6. Created AuditLogsController.
-7. Registered dependencies in Program.cs.
-8. Added audit logging to ProductService.
-9. Tested audit logging by creating a product.
-10. Verified audit log with GET /api/AuditLogs.
-
-Documentation:
-
-1. Updated api_documentation.md.
-2. Updated database_design.md.
-3. Updated security_owasp.md.
-4. Updated sprint_logs.md.
-
-### Important rules implemented
-
-1. Product creation is logged.
-2. Product updates are logged.
-3. Product deletion is logged.
-4. Audit logs include entity name, action, performed by, timestamp and change description.
-
-### Current limitation
-
-Audit log currently uses:
-
-```text
-System
-```
-
-as PerformedBy because authentication is not implemented yet.
-
-When login and roles are added, audit log should use the authenticated user.
+* Created customer DTOs and request models.
+* Created CustomerService.
+* Created CustomerRepository.
+* Created CustomersController.
+* Added create, read, update and search functionality.
+* Added validation for required customer fields.
+* Added audit logging for customer changes.
 
 ### Result
 
-Audit Log was completed and backend documentation was updated.
+B2B customers could be managed in the system.
 
-## Current backend status
+## Sprint 7: Order API
 
-Completed:
+### Goal
 
-1. Product API
-2. Inventory API
-3. Customer API
-4. Order API
-5. Shipment API
-6. Incident API
-7. Audit Log
-8. Backend documentation update
+Implement order handling.
 
-Next planned step:
+### Completed work
 
-```text
-React frontend with layout, sidebar and dashboard
-```
+* Created order DTOs and request models.
+* Created OrderService.
+* Created OrderRepository.
+* Created OrdersController.
+* Added order creation.
+* Added order status updates.
+* Added order cancellation.
+* Added order item handling.
+* Added inventory reduction when orders are created.
+* Added inventory restoration when orders are cancelled.
+* Added business rules for customer existence, inventory existence, stock availability and valid status changes.
+* Added audit logging for order changes.
+
+### Result
+
+The system could handle B2B customer orders and stock reservation.
+
+## Sprint 8: Shipment API
+
+### Goal
+
+Implement shipment handling.
+
+### Completed work
+
+* Created shipment DTOs and request models.
+* Created ShipmentService.
+* Created ShipmentRepository.
+* Created ShipmentsController.
+* Added shipment creation from orders.
+* Added shipment status updates.
+* Added delivered date handling.
+* Added business rules for cancelled orders, duplicate shipments and final shipment statuses.
+* Added audit logging for shipment changes.
+
+### Result
+
+The system could track deliveries connected to customer orders.
+
+## Sprint 9: Incident API
+
+### Goal
+
+Implement incident reporting and resolution.
+
+### Completed work
+
+* Created incident DTOs and request models.
+* Created IncidentService.
+* Created IncidentRepository.
+* Created IncidentsController.
+* Added incident creation.
+* Added incident status updates.
+* Added incident closing with resolution notes.
+* Added filtering by incident status.
+* Added business rules for severity, related entity type, closed incidents and resolution notes.
+* Added audit logging for incident changes.
+
+### Result
+
+Operational problems could be reported, tracked and closed.
+
+## Sprint 10: Dashboard and audit log
+
+### Goal
+
+Create operational overview and change history.
+
+### Completed work
+
+* Created DashboardService.
+* Created DashboardRepository.
+* Created DashboardController.
+* Created AuditLogService.
+* Created AuditLogRepository.
+* Created AuditLogsController.
+* Added dashboard summary for active orders, low stock, open incidents and active shipments.
+* Added recent activity and recent shipment data.
+* Added audit log view support.
+
+### Result
+
+The system had operational overview and traceability.
+
+## Sprint 11: React frontend foundation
+
+### Goal
+
+Create the frontend application and main layout.
+
+### Completed work
+
+* Created React TypeScript frontend with Vite.
+* Added Tailwind CSS.
+* Added React Router.
+* Added Axios API clients.
+* Added TanStack React Query.
+* Created layout with sidebar navigation.
+* Created dashboard page.
+* Connected dashboard to backend API.
+
+### Result
+
+The frontend foundation was ready for business pages.
+
+## Sprint 12: Frontend business pages
+
+### Goal
+
+Create pages for the main business areas.
+
+### Completed work
+
+* Created Products page.
+* Created Inventory page.
+* Created Customers page.
+* Created Orders page.
+* Created Shipments page.
+* Created Incidents page.
+* Created Change History page.
+* Added forms and actions for supported operations.
+* Connected pages to backend APIs.
+* Added frontend validation where needed.
+* Added dashboard charts and summary cards.
+
+### Result
+
+The main WarehouseOps workflow could be used through the frontend.
+
+## Sprint 13: Authentication and roles
+
+### Goal
+
+Add login, logout and role based access.
+
+### Completed work
+
+* Added AuthController.
+* Added AuthService.
+* Added JWT token generation.
+* Added password hashing service.
+* Added demo users for Admin, WarehouseStaff and Manager.
+* Added JWT authentication configuration.
+* Added backend role based authorization.
+* Added frontend auth context.
+* Added protected routes.
+* Added login page.
+* Added logout support.
+* Added role based UI actions.
+
+### Result
+
+Users could log in and see actions based on their role.
+
+## Sprint 14: Security improvements
+
+### Goal
+
+Improve security and traceability.
+
+### Completed work
+
+* Added current user service.
+* Updated audit log to use the authenticated user instead of only System.
+* Added global exception handling middleware.
+* Prevented internal technical errors from being returned to users.
+* Verified backend authorization with Swagger.
+* Verified Manager gets 403 Forbidden for restricted actions.
+* Verified WarehouseStaff creates audit logs but cannot view audit history.
+
+### Result
+
+The system had stronger practical OWASP alignment.
+
+## Sprint 15: Backend tests
+
+### Goal
+
+Add automated tests for core business logic.
+
+### Completed work
+
+* Configured xUnit test project.
+* Added Moq.
+* Added FluentAssertions.
+* Created ProductServiceTests.
+* Created InventoryServiceTests.
+* Created OrderServiceTests.
+* Created ShipmentServiceTests.
+* Created IncidentServiceTests.
+* Verified 50 backend service tests pass.
+
+### Result
+
+Important business rules are covered by automated tests.
+
+## Sprint 16: GitHub Actions CI
+
+### Goal
+
+Add continuous integration.
+
+### Completed work
+
+* Created GitHub Actions workflow.
+* Added backend restore.
+* Added backend build.
+* Added backend test execution.
+* Added frontend dependency installation.
+* Added frontend build.
+* Updated checkout action to a newer version.
+* Verified green CI on GitHub.
+
+### Result
+
+Every push and pull request to main is checked automatically.
+
+## Sprint 17: Docker and Docker Compose
+
+### Goal
+
+Containerize the system.
+
+### Completed work
+
+* Added backend Dockerfile.
+* Added frontend Dockerfile.
+* Added frontend Nginx configuration.
+* Added Docker ignore files.
+* Added docker-compose.yml.
+* Added SQL Server container.
+* Added backend container.
+* Added frontend container.
+* Bound backend and frontend to 127.0.0.1.
+* Kept SQL Server internal to Docker network.
+* Added .env.example.
+* Added .env to .gitignore.
+* Tested docker compose build.
+* Tested docker compose up.
+* Verified frontend, backend and SQL Server run together.
+
+### Result
+
+The full system can run locally with Docker Compose.
+
+## Sprint 18: Demo seed data
+
+### Goal
+
+Make the Docker version useful immediately after startup.
+
+### Completed work
+
+* Added DatabaseSeeder.
+* Added technology import demo data.
+* Seeded products, inventory, customers, orders, shipments, incidents and audit logs.
+* Added automatic migration option for Docker.
+* Added automatic seed option for Docker.
+* Tested Docker database reset with docker compose down -v.
+* Verified seeded data appears in frontend.
+
+### Result
+
+A new Docker database starts with realistic B2B technology warehouse data.
+
+## Sprint 19: README and documentation
+
+### Goal
+
+Make the project understandable on GitHub.
+
+### Completed work
+
+* Wrote README.
+* Documented project purpose.
+* Documented tech stack.
+* Documented user roles.
+* Documented setup with Docker.
+* Documented local setup.
+* Documented tests and CI.
+* Added architecture documentation.
+* Added OWASP security documentation.
+* Added FURPS+ requirements documentation.
+* Added testing documentation.
+* Added API documentation.
+* Added database design documentation.
+* Added SOLID and GRASP documentation.
+* Added sprint logs.
+
+### Result
+
+The project is easier to review, run and discuss in a portfolio or interview.
+
+## Current status
+
+Implemented:
+
+* Backend API
+* React frontend
+* SQL Server persistence
+* Login and JWT authentication
+* Role based authorization
+* Role based frontend actions
+* Dashboard
+* Product management
+* Inventory management
+* Customer management
+* Order management
+* Shipment management
+* Incident management
+* Audit logs
+* Global exception handling
+* 50 backend service tests
+* GitHub Actions CI
+* Docker Compose
+* Demo seed data
+* README
+* Documentation
+
+## Remaining improvements
+
+Possible future improvements:
+
+* Add screenshots to README.
+* Add controller integration tests.
+* Add authorization integration tests.
+* Add frontend tests.
+* Add Docker build validation to GitHub Actions.
+* Add stricter database uniqueness constraints.
+* Replace demo users with ASP.NET Identity.
+* Add refresh token support.
+* Add rate limiting for login.
+* Add supplier purchasing.
+* Add return handling.
+* Add barcode scanning.
+* Add multi warehouse support.
+
+## Summary
+
+WarehouseOps was built iteratively from backend foundation to frontend, security, tests, CI, Docker and documentation.
+
+The final result is a fullstack warehouse operations portfolio project with practical examples of architecture, business rules, testing, DevOps and security aware development.
