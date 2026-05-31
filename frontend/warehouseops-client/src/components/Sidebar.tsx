@@ -9,9 +9,19 @@ import {
   Package,
   Truck,
   Users,
+  type LucideIcon,
 } from "lucide-react";
+import { useAuth } from "../auth/AuthContext";
+import type { UserRole } from "../types/auth";
 
-const navigationItems = [
+type NavigationItem = {
+  name: string;
+  path: string;
+  icon: LucideIcon;
+  roles?: UserRole[];
+};
+
+const navigationItems: NavigationItem[] = [
   { name: "Dashboard", path: "/", icon: LayoutDashboard },
   { name: "Products", path: "/products", icon: Package },
   { name: "Inventory", path: "/inventory", icon: Boxes },
@@ -19,10 +29,20 @@ const navigationItems = [
   { name: "Orders", path: "/orders", icon: ClipboardList },
   { name: "Shipments", path: "/shipments", icon: Truck },
   { name: "Incidents", path: "/incidents", icon: AlertTriangle },
-  { name: "Change History", path: "/audit-logs", icon: History },
+  { name: "Change History", path: "/audit-logs", icon: History, roles: ["Admin", "Manager"] },
 ];
 
 export default function Sidebar() {
+  const { user } = useAuth();
+
+  const allowedNavigationItems = navigationItems.filter((item) => {
+    if (!item.roles) {
+      return true;
+    }
+
+    return user ? item.roles.includes(user.role) : false;
+  });
+
   return (
     <aside className="fixed inset-y-0 left-0 z-20 hidden w-72 border-r border-slate-800 bg-slate-950 px-4 py-5 text-white lg:block">
       <div className="mb-8 flex items-center gap-3 px-2">
@@ -37,7 +57,7 @@ export default function Sidebar() {
       </div>
 
       <nav className="space-y-1">
-        {navigationItems.map((item) => {
+        {allowedNavigationItems.map((item) => {
           const Icon = item.icon;
 
           return (
@@ -62,9 +82,9 @@ export default function Sidebar() {
       </nav>
 
       <div className="absolute bottom-5 left-4 right-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-        <p className="text-sm font-semibold text-white">System status</p>
+        <p className="text-sm font-semibold text-white">Signed in as</p>
         <p className="mt-1 text-xs leading-5 text-slate-400">
-          Products, stock, customers, orders, shipments, incidents and change history are available.
+          {user ? `${user.displayName} | ${user.role}` : "No user"}
         </p>
       </div>
     </aside>

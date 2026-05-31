@@ -1,7 +1,11 @@
-﻿import { Outlet } from "react-router-dom";
+﻿import { LogOut } from "lucide-react";
+import { Outlet } from "react-router-dom";
+import { useAuth } from "../auth/AuthContext";
 import Sidebar from "../components/Sidebar";
 
 export default function AppLayout() {
+  const { user, logout } = useAuth();
+
   return (
     <div className="min-h-screen bg-slate-100">
       <Sidebar />
@@ -14,8 +18,21 @@ export default function AppLayout() {
               <h1 className="text-lg font-semibold text-slate-950">Operations dashboard</h1>
             </div>
 
-            <div className="hidden rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 md:block">
-              Internal logistics system
+            <div className="flex items-center gap-3">
+              {user && (
+                <div className="hidden rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 md:block">
+                  {user.displayName} | {user.role}
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={logout}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                <LogOut size={16} />
+                Logout
+              </button>
             </div>
           </div>
         </header>
