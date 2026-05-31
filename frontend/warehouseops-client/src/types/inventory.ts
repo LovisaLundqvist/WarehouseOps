@@ -10,6 +10,12 @@
   updatedAt: string | null;
 };
 
+export type CreateInventoryItemRequest = {
+  productId: string;
+  quantityInStock: number;
+  minimumStockLevel: number;
+};
+
 export type UpdateInventoryItemRequest = {
   quantityInStock: number;
   minimumStockLevel: number;

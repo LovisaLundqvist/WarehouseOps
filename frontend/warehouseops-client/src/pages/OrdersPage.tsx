@@ -1,4 +1,4 @@
-﻿import { useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
@@ -16,9 +16,12 @@ import {
 } from "lucide-react";
 import { z } from "zod";
 import { getCustomers } from "../api/customersApi";
+import { getInventoryItems } from "../api/inventoryApi";
 import { createOrder, cancelOrder, getOrders, updateOrderStatus } from "../api/ordersApi";
 import { getProducts } from "../api/productsApi";
+import type { InventoryItem } from "../types/inventory";
 import type { Order } from "../types/order";
+import type { Product } from "../types/product";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 import { formatShortId } from "../utils/formatShortId";
 
@@ -68,6 +71,11 @@ const createOrderSchema = z.object({
 });
 
 type CreateOrderFormValues = z.infer<typeof createOrderSchema>;
+
+type AvailableOrderProduct = {
+  product: Product;
+  inventoryItem: InventoryItem;
+};
 
 const initialCreateOrderFormValues: CreateOrderFormValues = {
   customerId: "",
@@ -122,6 +130,30 @@ function mapValidationErrors(error: z.ZodError<CreateOrderFormValues>) {
   return validationErrors;
 }
 
+function getAvailableOrderProducts(
+  products: Product[],
+  inventoryItems: InventoryItem[],
+): AvailableOrderProduct[] {
+  return inventoryItems
+    .filter((inventoryItem) => inventoryItem.quantityInStock > 0)
+    .map((inventoryItem) => {
+      const product = products.find(
+        (currentProduct) => currentProduct.id === inventoryItem.productId,
+      );
+
+      if (!product) {
+        return null;
+      }
+
+      return {
+        product,
+        inventoryItem,
+      };
+    })
+    .filter((item): item is AvailableOrderProduct => item !== null)
+    .sort((left, right) => left.product.name.localeCompare(right.product.name));
+}
+
 export default function OrdersPage() {
   const queryClient = useQueryClient();
 
@@ -166,6 +198,24 @@ export default function OrdersPage() {
     queryFn: () => getProducts(),
   });
 
+  const {
+    data: inventoryItems = [],
+    isLoading: isLoadingInventory,
+    isError: isInventoryError,
+    error: inventoryError,
+  } = useQuery({
+    queryKey: ["inventory", "order-form"],
+    queryFn: getInventoryItems,
+  });
+
+  const availableOrderProducts = useMemo(() => {
+    return getAvailableOrderProducts(products, inventoryItems);
+  }, [products, inventoryItems]);
+
+  const availableProductIds = useMemo(() => {
+    return new Set(availableOrderProducts.map((item) => item.product.id));
+  }, [availableOrderProducts]);
+
   const createOrderMutation = useMutation({
     mutationFn: createOrder,
     onSuccess: (createdOrder) => {
@@ -176,6 +226,7 @@ export default function OrdersPage() {
       setSelectedStatus(createdOrder.status);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
   });
 
@@ -187,6 +238,7 @@ export default function OrdersPage() {
       setSelectedOrder(updatedOrder);
       setSelectedStatus(updatedOrder.status);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
   });
 
@@ -198,6 +250,7 @@ export default function OrdersPage() {
       setSelectedStatus(cancelledOrder.status);
       queryClient.invalidateQueries({ queryKey: ["orders"] });
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
   });
 
@@ -227,6 +280,11 @@ export default function OrdersPage() {
     "Could not load products for the order form.",
   );
 
+  const inventoryLoadErrorMessage = getApiErrorMessage(
+    inventoryError,
+    "Could not load inventory for the order form.",
+  );
+
   const createOrderErrorMessage = getApiErrorMessage(
     createOrderMutation.error,
     "Could not create order.",
@@ -240,8 +298,9 @@ export default function OrdersPage() {
   const hasActionError = updateStatusMutation.isError || cancelOrderMutation.isError;
   const isActionPending = updateStatusMutation.isPending || cancelOrderMutation.isPending;
   const isCreateOrderPending = createOrderMutation.isPending;
-  const isCreateOrderDataLoading = isLoadingCustomers || isLoadingProducts;
-  const hasCreateOrderDataError = isCustomersError || isProductsError;
+  const isCreateOrderDataLoading = isLoadingCustomers || isLoadingProducts || isLoadingInventory;
+  const hasCreateOrderDataError = isCustomersError || isProductsError || isInventoryError;
+  const hasAvailableProducts = availableOrderProducts.length > 0;
 
   function toggleOrderDetails(orderId: string) {
     setExpandedOrderId((current) => (current === orderId ? null : orderId));
@@ -326,6 +385,29 @@ export default function OrdersPage() {
     }));
   }
 
+  function validateInventoryAvailability(values: CreateOrderFormValues) {
+    const validationErrors: Record<string, string> = {};
+
+    values.items.forEach((item, index) => {
+      if (!availableProductIds.has(item.productId)) {
+        validationErrors[`items.${index}.productId`] =
+          "This product is not available in inventory.";
+        return;
+      }
+
+      const availableProduct = availableOrderProducts.find(
+        (currentProduct) => currentProduct.product.id === item.productId,
+      );
+
+      if (availableProduct && item.quantity > availableProduct.inventoryItem.quantityInStock) {
+        validationErrors[`items.${index}.quantity`] =
+          `Only ${availableProduct.inventoryItem.quantityInStock} available in inventory.`;
+      }
+    });
+
+    return validationErrors;
+  }
+
   function handleCreateOrderSubmit() {
     setSuccessMessage("");
     createOrderMutation.reset();
@@ -336,6 +418,13 @@ export default function OrdersPage() {
 
     if (!result.success) {
       setCreateOrderValidationErrors(mapValidationErrors(result.error));
+      return;
+    }
+
+    const inventoryValidationErrors = validateInventoryAvailability(result.data);
+
+    if (Object.keys(inventoryValidationErrors).length > 0) {
+      setCreateOrderValidationErrors(inventoryValidationErrors);
       return;
     }
 
@@ -428,7 +517,7 @@ export default function OrdersPage() {
             <div>
               <h3 className="text-base font-semibold text-slate-950">Order summary</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Order creation checks customer, product and stock rules before the order is saved.
+                Only products that are available in inventory can be selected for new orders.
               </p>
             </div>
           </div>
@@ -452,7 +541,7 @@ export default function OrdersPage() {
             <div>
               <h3 className="text-base font-semibold text-slate-950">Create order</h3>
               <p className="mt-1 text-sm text-slate-500">
-                Select a customer and one or more products. Stock is reduced when the order is created.
+                Select a customer and products that are currently available in inventory.
               </p>
             </div>
           </div>
@@ -470,9 +559,19 @@ export default function OrdersPage() {
             <div className="flex gap-2">
               <AlertTriangle size={18} />
               <span>
-                {isCustomersError ? customerLoadErrorMessage : productLoadErrorMessage}
+                {isCustomersError
+                  ? customerLoadErrorMessage
+                  : isProductsError
+                    ? productLoadErrorMessage
+                    : inventoryLoadErrorMessage}
               </span>
             </div>
+          </div>
+        )}
+
+        {!isCreateOrderDataLoading && !hasCreateOrderDataError && !hasAvailableProducts && (
+          <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+            No products are available in inventory. Add products to inventory and update stock before creating an order.
           </div>
         )}
 
@@ -482,7 +581,7 @@ export default function OrdersPage() {
             <select
               value={createOrderForm.customerId}
               onChange={(event) => handleCreateOrderCustomerChange(event.target.value)}
-              disabled={isCreateOrderDataLoading || hasCreateOrderDataError}
+              disabled={isCreateOrderDataLoading || hasCreateOrderDataError || !hasAvailableProducts}
               className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
             >
               <option value="">Select customer</option>
@@ -505,7 +604,7 @@ export default function OrdersPage() {
               <button
                 type="button"
                 onClick={handleAddOrderItem}
-                disabled={isCreateOrderDataLoading || hasCreateOrderDataError}
+                disabled={isCreateOrderDataLoading || hasCreateOrderDataError || !hasAvailableProducts}
                 className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
               >
                 <Plus size={15} />
@@ -514,7 +613,12 @@ export default function OrdersPage() {
             </div>
 
             {createOrderForm.items.map((item, index) => {
-              const product = products.find((currentProduct) => currentProduct.id === item.productId);
+              const availableProduct = availableOrderProducts.find(
+                (currentProduct) => currentProduct.product.id === item.productId,
+              );
+
+              const product = availableProduct?.product;
+              const inventoryItem = availableProduct?.inventoryItem;
               const lineTotal = product ? product.price * item.quantity : 0;
 
               return (
@@ -528,13 +632,13 @@ export default function OrdersPage() {
                       <select
                         value={item.productId}
                         onChange={(event) => handleCreateOrderItemProductChange(index, event.target.value)}
-                        disabled={isCreateOrderDataLoading || hasCreateOrderDataError}
+                        disabled={isCreateOrderDataLoading || hasCreateOrderDataError || !hasAvailableProducts}
                         className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
                       >
                         <option value="">Select product</option>
-                        {products.map((currentProduct) => (
-                          <option key={currentProduct.id} value={currentProduct.id}>
-                            {currentProduct.name} ({currentProduct.sku})
+                        {availableOrderProducts.map((currentProduct) => (
+                          <option key={currentProduct.product.id} value={currentProduct.product.id}>
+                            {currentProduct.product.name} ({currentProduct.product.sku}) | In stock: {currentProduct.inventoryItem.quantityInStock}
                           </option>
                         ))}
                       </select>
@@ -553,14 +657,21 @@ export default function OrdersPage() {
                       <input
                         type="number"
                         min="1"
+                        max={inventoryItem?.quantityInStock ?? undefined}
                         value={item.quantity}
                         onChange={(event) =>
                           handleCreateOrderItemQuantityChange(index, Number(event.target.value))
                         }
-                        disabled={isCreateOrderDataLoading || hasCreateOrderDataError}
+                        disabled={isCreateOrderDataLoading || hasCreateOrderDataError || !hasAvailableProducts}
                         className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
                       />
                     </label>
+
+                    {inventoryItem && (
+                      <p className="mt-2 text-xs text-slate-500">
+                        Available: {inventoryItem.quantityInStock}
+                      </p>
+                    )}
 
                     {createOrderValidationErrors[`items.${index}.quantity`] && (
                       <p className="mt-2 text-sm text-red-600">
@@ -601,7 +712,12 @@ export default function OrdersPage() {
           <button
             type="button"
             onClick={handleCreateOrderSubmit}
-            disabled={isCreateOrderPending || isCreateOrderDataLoading || hasCreateOrderDataError}
+            disabled={
+              isCreateOrderPending ||
+              isCreateOrderDataLoading ||
+              hasCreateOrderDataError ||
+              !hasAvailableProducts
+            }
             className="justify-self-start rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
           >
             {isCreateOrderPending ? "Creating..." : "Create order"}
@@ -780,7 +896,9 @@ export default function OrdersPage() {
                                 <p className="text-sm font-semibold text-slate-950">
                                   {order.customerName}
                                 </p>
-                                <p className="mt-1 text-xs text-slate-500">{formatShortId(order.id, "Order")}</p>
+                                <p className="mt-1 text-xs text-slate-500">
+                                  {formatShortId(order.id, "Order")}
+                                </p>
                               </div>
                             </div>
                           </div>
@@ -894,5 +1012,3 @@ export default function OrdersPage() {
     </div>
   );
 }
-
-

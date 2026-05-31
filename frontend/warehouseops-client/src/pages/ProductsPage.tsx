@@ -1,9 +1,11 @@
-﻿import { type FormEvent, useState } from "react";
+﻿import { type FormEvent, useMemo, useState } from "react";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   AlertTriangle,
+  CheckCircle2,
   Package,
+  PackagePlus,
   Pencil,
   Plus,
   Search,
@@ -13,6 +15,8 @@ import {
 } from "lucide-react";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import { z } from "zod";
+import { useAuth } from "../auth/AuthContext";
+import { createInventoryItem, getInventoryItems } from "../api/inventoryApi";
 import { createProduct, deleteProduct, getProducts, updateProduct } from "../api/productsApi";
 import type {
   CreateProductRequest,
@@ -47,6 +51,10 @@ const initialProductFormValues: ProductFormValues = {
 
 export default function ProductsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  const canManageProducts = user?.role === "Admin";
+  const canAddProductsToInventory = user?.role === "Admin" || user?.role === "WarehouseStaff";
 
   const [draftFilters, setDraftFilters] = useState<ProductFilters>({
     search: "",
@@ -85,6 +93,20 @@ export default function ProductsPage() {
     queryFn: () => getProducts(filters),
   });
 
+  const {
+    data: inventoryItems = [],
+    isLoading: isInventoryLoading,
+    isError: isInventoryError,
+    error: inventoryError,
+  } = useQuery({
+    queryKey: ["inventory", "products-page"],
+    queryFn: getInventoryItems,
+  });
+
+  const inventoryProductIds = useMemo(() => {
+    return new Set(inventoryItems.map((inventoryItem) => inventoryItem.productId));
+  }, [inventoryItems]);
+
   const createProductMutation = useMutation({
     mutationFn: createProduct,
     onSuccess: (createdProduct) => {
@@ -122,6 +144,20 @@ export default function ProductsPage() {
     },
   });
 
+  const addToInventoryMutation = useMutation({
+    mutationFn: (productId: string) =>
+      createInventoryItem({
+        productId,
+        quantityInStock: 0,
+        minimumStockLevel: 0,
+      }),
+    onSuccess: (inventoryItem) => {
+      setSuccessMessage(`${inventoryItem.productName} was added to inventory.`);
+      queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
+    },
+  });
+
   function handleFilterSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
@@ -142,11 +178,16 @@ export default function ProductsPage() {
   }
 
   function handleStartEdit(product: Product) {
+    if (!canManageProducts) {
+      return;
+    }
+
     setSuccessMessage("");
     setProductToDelete(null);
     createProductMutation.reset();
     updateProductMutation.reset();
     deleteProductMutation.reset();
+    addToInventoryMutation.reset();
 
     setEditingProductId(product.id);
     setEditingProductName(product.name);
@@ -173,10 +214,15 @@ export default function ProductsPage() {
   }
 
   function handleRequestDelete(product: Product) {
+    if (!canManageProducts) {
+      return;
+    }
+
     setSuccessMessage("");
     createProductMutation.reset();
     updateProductMutation.reset();
     deleteProductMutation.reset();
+    addToInventoryMutation.reset();
 
     setProductToDelete(product);
   }
@@ -187,18 +233,37 @@ export default function ProductsPage() {
   }
 
   function handleConfirmDelete() {
-    if (!productToDelete) {
+    if (!canManageProducts || !productToDelete) {
       return;
     }
 
     deleteProductMutation.mutate(productToDelete.id);
   }
 
-  const handleSaveProduct: SubmitHandler<ProductFormValues> = (values) => {
+  function handleAddToInventory(product: Product) {
+    if (!canAddProductsToInventory || inventoryProductIds.has(product.id)) {
+      return;
+    }
+
     setSuccessMessage("");
     createProductMutation.reset();
     updateProductMutation.reset();
     deleteProductMutation.reset();
+    addToInventoryMutation.reset();
+
+    addToInventoryMutation.mutate(product.id);
+  }
+
+  const handleSaveProduct: SubmitHandler<ProductFormValues> = (values) => {
+    if (!canManageProducts) {
+      return;
+    }
+
+    setSuccessMessage("");
+    createProductMutation.reset();
+    updateProductMutation.reset();
+    deleteProductMutation.reset();
+    addToInventoryMutation.reset();
 
     const request: CreateProductRequest | UpdateProductRequest = {
       name: values.name.trim(),
@@ -222,6 +287,11 @@ export default function ProductsPage() {
 
   const listErrorMessage = getApiErrorMessage(error, "Could not load products.");
 
+  const inventoryErrorMessage = getApiErrorMessage(
+    inventoryError,
+    "Could not load inventory status for products.",
+  );
+
   const saveErrorMessage = getApiErrorMessage(
     isEditing ? updateProductMutation.error : createProductMutation.error,
     isEditing ? "Could not update product." : "Could not create product.",
@@ -232,8 +302,14 @@ export default function ProductsPage() {
     "Could not delete product.",
   );
 
+  const addToInventoryErrorMessage = getApiErrorMessage(
+    addToInventoryMutation.error,
+    "Could not add product to inventory.",
+  );
+
   const isSaving = createProductMutation.isPending || updateProductMutation.isPending;
   const hasSaveError = createProductMutation.isError || updateProductMutation.isError;
+  const showActionsColumn = canManageProducts || canAddProductsToInventory;
 
   return (
     <div className="space-y-6">
@@ -251,7 +327,7 @@ export default function ProductsPage() {
           </div>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500">
-            Create, update, delete and view warehouse products. Search by name or SKU and filter by category.
+            View warehouse products, add products to inventory and manage product details based on your role.
           </p>
         </div>
 
@@ -261,124 +337,151 @@ export default function ProductsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
-              {isEditing ? <Pencil size={20} /> : <Plus size={20} />}
+      {canManageProducts ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
+                {isEditing ? <Pencil size={20} /> : <Plus size={20} />}
+              </div>
+
+              <div>
+                <h3 className="text-base font-semibold text-slate-950">
+                  {isEditing ? "Update product" : "Create product"}
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  {isEditing
+                    ? `Editing ${editingProductName}. Save changes or cancel editing.`
+                    : "Add a new product to the warehouse catalog."}
+                </p>
+              </div>
             </div>
 
-            <div>
-              <h3 className="text-base font-semibold text-slate-950">
-                {isEditing ? "Update product" : "Create product"}
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                {isEditing
-                  ? `Editing ${editingProductName}. Save changes or cancel editing.`
-                  : "Add a new product to the warehouse catalog."}
-              </p>
-            </div>
+            {isEditing && (
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                <X size={16} />
+                Cancel edit
+              </button>
+            )}
           </div>
 
-          {isEditing && (
-            <button
-              type="button"
-              onClick={handleCancelEdit}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              <X size={16} />
-              Cancel edit
-            </button>
-          )}
-        </div>
+          <form onSubmit={handleSubmit(handleSaveProduct)} className="grid gap-4 lg:grid-cols-2">
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Name</span>
+              <input
+                {...register("name")}
+                placeholder="Example: Laptop Dell XPS 15"
+                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
+            </label>
 
-        <form onSubmit={handleSubmit(handleSaveProduct)} className="grid gap-4 lg:grid-cols-2">
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Name</span>
-            <input
-              {...register("name")}
-              placeholder="Example: Laptop Dell XPS 15"
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-            {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
-          </label>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">SKU</span>
+              <input
+                {...register("sku")}
+                placeholder="Example: LAP-DELL-XPS15"
+                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              {errors.sku && <p className="mt-1 text-sm text-red-600">{errors.sku.message}</p>}
+            </label>
 
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">SKU</span>
-            <input
-              {...register("sku")}
-              placeholder="Example: LAP-DELL-XPS15"
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-            {errors.sku && <p className="mt-1 text-sm text-red-600">{errors.sku.message}</p>}
-          </label>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Category</span>
+              <input
+                {...register("category")}
+                placeholder="Example: Electronics"
+                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              {errors.category && (
+                <p className="mt-1 text-sm text-red-600">{errors.category.message}</p>
+              )}
+            </label>
 
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Category</span>
-            <input
-              {...register("category")}
-              placeholder="Example: Electronics"
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-            {errors.category && (
-              <p className="mt-1 text-sm text-red-600">{errors.category.message}</p>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Price</span>
+              <input
+                {...register("price", { valueAsNumber: true })}
+                type="number"
+                min="0"
+                step="0.01"
+                placeholder="Example: 18999"
+                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              {errors.price && <p className="mt-1 text-sm text-red-600">{errors.price.message}</p>}
+            </label>
+
+            <label className="block lg:col-span-2">
+              <span className="text-sm font-medium text-slate-700">Description</span>
+              <textarea
+                {...register("description")}
+                rows={3}
+                placeholder="Short product description"
+                className="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
+
+            {successMessage && (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 lg:col-span-2">
+                {successMessage}
+              </div>
             )}
-          </label>
 
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Price</span>
-            <input
-              {...register("price", { valueAsNumber: true })}
-              type="number"
-              min="0"
-              step="0.01"
-              placeholder="Example: 18999"
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-            {errors.price && <p className="mt-1 text-sm text-red-600">{errors.price.message}</p>}
-          </label>
+            {hasSaveError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-2">
+                {saveErrorMessage}
+              </div>
+            )}
 
-          <label className="block lg:col-span-2">
-            <span className="text-sm font-medium text-slate-700">Description</span>
-            <textarea
-              {...register("description")}
-              rows={3}
-              placeholder="Short product description"
-              className="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </label>
+            {addToInventoryMutation.isError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-2">
+                {addToInventoryErrorMessage}
+              </div>
+            )}
+
+            <div className="flex justify-end lg:col-span-2">
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+              >
+                {isSaving
+                  ? isEditing
+                    ? "Updating..."
+                    : "Creating..."
+                  : isEditing
+                    ? "Update product"
+                    : "Create product"}
+              </button>
+            </div>
+          </form>
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-slate-950">Read only product access</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Your role can view products. Product creation, editing and deletion are only available for Admin users.
+          </p>
+
+          {addToInventoryMutation.isError && (
+            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {addToInventoryErrorMessage}
+            </div>
+          )}
 
           {successMessage && (
-            <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 lg:col-span-2">
+            <div className="mt-4 rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700">
               {successMessage}
             </div>
           )}
+        </section>
+      )}
 
-          {hasSaveError && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-2">
-              {saveErrorMessage}
-            </div>
-          )}
-
-          <div className="flex justify-end lg:col-span-2">
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-            >
-              {isSaving
-                ? isEditing
-                  ? "Updating..."
-                  : "Creating..."
-                : isEditing
-                  ? "Update product"
-                  : "Create product"}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      {productToDelete && (
+      {canManageProducts && productToDelete && (
         <section className="rounded-2xl border border-red-200 bg-red-50 p-5 shadow-sm">
           <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
             <div className="flex gap-3">
@@ -486,6 +589,12 @@ export default function ProductsPage() {
           <p className="mt-1 text-sm text-slate-500">
             Shows all products currently registered in the warehouse.
           </p>
+
+          {isInventoryError && (
+            <p className="mt-3 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-800">
+              {inventoryErrorMessage}
+            </p>
+          )}
         </div>
 
         {isLoading && (
@@ -524,65 +633,110 @@ export default function ProductsPage() {
                     Price
                   </th>
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    Inventory
+                  </th>
+                  <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Created
                   </th>
-                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Actions
-                  </th>
+                  {showActionsColumn && (
+                    <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Actions
+                    </th>
+                  )}
                 </tr>
               </thead>
 
               <tbody className="divide-y divide-slate-100 bg-white">
-                {products.map((product) => (
-                  <tr key={product.id} className="hover:bg-slate-50">
-                    <td className="px-5 py-4">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-950">{product.name}</p>
-                        <p className="mt-1 max-w-xl text-sm text-slate-500">{product.description}</p>
-                      </div>
-                    </td>
+                {products.map((product) => {
+                  const isInInventory = inventoryProductIds.has(product.id);
+                  const isAddingThisProduct =
+                    addToInventoryMutation.isPending &&
+                    addToInventoryMutation.variables === product.id;
 
-                    <td className="whitespace-nowrap px-5 py-4 text-sm font-medium text-slate-700">
-                      {product.sku}
-                    </td>
+                  return (
+                    <tr key={product.id} className="hover:bg-slate-50">
+                      <td className="px-5 py-4">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-950">{product.name}</p>
+                          <p className="mt-1 max-w-xl text-sm text-slate-500">{product.description}</p>
+                        </div>
+                      </td>
 
-                    <td className="whitespace-nowrap px-5 py-4">
-                      <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
-                        {product.category}
-                      </span>
-                    </td>
+                      <td className="whitespace-nowrap px-5 py-4 text-sm font-medium text-slate-700">
+                        {product.sku}
+                      </td>
 
-                    <td className="whitespace-nowrap px-5 py-4 text-right text-sm font-semibold text-slate-950">
-                      {currencyFormatter.format(product.price)}
-                    </td>
+                      <td className="whitespace-nowrap px-5 py-4">
+                        <span className="rounded-full bg-blue-50 px-3 py-1 text-xs font-medium text-blue-700">
+                          {product.category}
+                        </span>
+                      </td>
 
-                    <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-500">
-                      {new Date(product.createdAt).toLocaleDateString("sv-SE")}
-                    </td>
+                      <td className="whitespace-nowrap px-5 py-4 text-right text-sm font-semibold text-slate-950">
+                        {currencyFormatter.format(product.price)}
+                      </td>
 
-                    <td className="whitespace-nowrap px-5 py-4 text-right">
-                      <div className="flex justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleStartEdit(product)}
-                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                        >
-                          <Pencil size={15} />
-                          Edit
-                        </button>
+                      <td className="whitespace-nowrap px-5 py-4">
+                        {isInventoryLoading ? (
+                          <span className="text-sm text-slate-500">Checking...</span>
+                        ) : isInInventory ? (
+                          <span className="inline-flex items-center gap-2 rounded-full bg-green-50 px-3 py-1 text-xs font-semibold text-green-700">
+                            <CheckCircle2 size={14} />
+                            In inventory
+                          </span>
+                        ) : (
+                          <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-slate-700">
+                            Not in inventory
+                          </span>
+                        )}
+                      </td>
 
-                        <button
-                          type="button"
-                          onClick={() => handleRequestDelete(product)}
-                          className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50"
-                        >
-                          <Trash2 size={15} />
-                          Delete
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="whitespace-nowrap px-5 py-4 text-sm text-slate-500">
+                        {new Date(product.createdAt).toLocaleDateString("sv-SE")}
+                      </td>
+
+                      {showActionsColumn && (
+                        <td className="whitespace-nowrap px-5 py-4 text-right">
+                          <div className="flex justify-end gap-2">
+                            {canAddProductsToInventory && !isInInventory && (
+                              <button
+                                type="button"
+                                onClick={() => handleAddToInventory(product)}
+                                disabled={isAddingThisProduct || isInventoryLoading || isInventoryError}
+                                className="inline-flex items-center gap-2 rounded-xl border border-blue-200 bg-white px-3 py-2 text-sm font-semibold text-blue-700 shadow-sm hover:bg-blue-50 disabled:cursor-not-allowed disabled:opacity-60"
+                              >
+                                <PackagePlus size={15} />
+                                {isAddingThisProduct ? "Adding..." : "Add to inventory"}
+                              </button>
+                            )}
+
+                            {canManageProducts && (
+                              <>
+                                <button
+                                  type="button"
+                                  onClick={() => handleStartEdit(product)}
+                                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                                >
+                                  <Pencil size={15} />
+                                  Edit
+                                </button>
+
+                                <button
+                                  type="button"
+                                  onClick={() => handleRequestDelete(product)}
+                                  className="inline-flex items-center gap-2 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50"
+                                >
+                                  <Trash2 size={15} />
+                                  Delete
+                                </button>
+                              </>
+                            )}
+                          </div>
+                        </td>
+                      )}
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -591,4 +745,3 @@ export default function ProductsPage() {
     </div>
   );
 }
-

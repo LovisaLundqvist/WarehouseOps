@@ -1,5 +1,9 @@
 ﻿import apiClient from "./apiClient";
-import type { InventoryItem, UpdateInventoryItemRequest } from "../types/inventory";
+import type {
+  CreateInventoryItemRequest,
+  InventoryItem,
+  UpdateInventoryItemRequest,
+} from "../types/inventory";
 
 export async function getInventoryItems(): Promise<InventoryItem[]> {
   const response = await apiClient.get<InventoryItem[]>("/Inventory");
@@ -9,6 +13,14 @@ export async function getInventoryItems(): Promise<InventoryItem[]> {
 
 export async function getLowStockInventoryItems(): Promise<InventoryItem[]> {
   const response = await apiClient.get<InventoryItem[]>("/Inventory/low-stock");
+
+  return response.data;
+}
+
+export async function createInventoryItem(
+  request: CreateInventoryItemRequest,
+): Promise<InventoryItem> {
+  const response = await apiClient.post<InventoryItem>("/Inventory", request);
 
   return response.data;
 }
