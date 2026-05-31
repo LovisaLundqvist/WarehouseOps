@@ -445,7 +445,7 @@ Set the JWT secret using user secrets:
 
 ```powershell
 cd backend/WarehouseOps.Api
-dotnet user-secrets set "Jwt:SecretKey" "WarehouseOps-Local-Development-Secret-Key-Change-Later-1234567890!"
+dotnet user-secrets set "Jwt:SecretKey" "REPLACE_WITH_STRONG_LOCAL_JWT_SECRET_AT_LEAST_32_CHARACTERS"
 ```
 
 Run the API:
