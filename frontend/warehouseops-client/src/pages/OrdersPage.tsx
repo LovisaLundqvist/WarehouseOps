@@ -15,6 +15,7 @@ import {
   X,
 } from "lucide-react";
 import { z } from "zod";
+import { useAuth } from "../auth/AuthContext";
 import { getCustomers } from "../api/customersApi";
 import { getInventoryItems } from "../api/inventoryApi";
 import { createOrder, cancelOrder, getOrders, updateOrderStatus } from "../api/ordersApi";
@@ -156,6 +157,9 @@ function getAvailableOrderProducts(
 
 export default function OrdersPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  const canManageOrders = user?.role === "Admin" || user?.role === "WarehouseStaff";
 
   const [expandedOrderId, setExpandedOrderId] = useState<string | null>(null);
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
@@ -186,6 +190,7 @@ export default function OrdersPage() {
   } = useQuery({
     queryKey: ["customers", "order-form"],
     queryFn: () => getCustomers(),
+    enabled: canManageOrders,
   });
 
   const {
@@ -196,6 +201,7 @@ export default function OrdersPage() {
   } = useQuery({
     queryKey: ["products", "order-form"],
     queryFn: () => getProducts(),
+    enabled: canManageOrders,
   });
 
   const {
@@ -206,6 +212,7 @@ export default function OrdersPage() {
   } = useQuery({
     queryKey: ["inventory", "order-form"],
     queryFn: getInventoryItems,
+    enabled: canManageOrders,
   });
 
   const availableOrderProducts = useMemo(() => {
@@ -307,6 +314,10 @@ export default function OrdersPage() {
   }
 
   function handleSelectOrder(order: Order) {
+    if (!canManageOrders) {
+      return;
+    }
+
     setSuccessMessage("");
     createOrderMutation.reset();
     updateStatusMutation.reset();
@@ -409,6 +420,10 @@ export default function OrdersPage() {
   }
 
   function handleCreateOrderSubmit() {
+    if (!canManageOrders) {
+      return;
+    }
+
     setSuccessMessage("");
     createOrderMutation.reset();
     updateStatusMutation.reset();
@@ -433,7 +448,7 @@ export default function OrdersPage() {
   }
 
   function handleUpdateStatus() {
-    if (!selectedOrder || !selectedStatus) {
+    if (!canManageOrders || !selectedOrder || !selectedStatus) {
       return;
     }
 
@@ -449,7 +464,7 @@ export default function OrdersPage() {
   }
 
   function handleCancelOrder() {
-    if (!selectedOrder) {
+    if (!canManageOrders || !selectedOrder) {
       return;
     }
 
@@ -485,7 +500,7 @@ export default function OrdersPage() {
           </div>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500">
-            Create customer orders, inspect order lines, update order status and cancel orders when business rules allow it.
+            View customer orders, inspect order lines and manage order handling based on your role.
           </p>
         </div>
 
@@ -507,324 +522,335 @@ export default function OrdersPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-slate-50 p-3 text-slate-600">
-              <ReceiptText size={20} />
-            </div>
-
-            <div>
-              <h3 className="text-base font-semibold text-slate-950">Order summary</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Only products that are available in inventory can be selected for new orders.
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-slate-50 px-5 py-4">
-            <p className="text-sm font-medium text-slate-500">Total order value</p>
-            <p className="mt-1 text-2xl font-bold text-slate-950">
-              {currencyFormatter.format(totalOrderValue)}
-            </p>
-          </div>
-        </div>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-5 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
-              <ShoppingCart size={20} />
-            </div>
-
-            <div>
-              <h3 className="text-base font-semibold text-slate-950">Create order</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Select a customer and products that are currently available in inventory.
-              </p>
-            </div>
-          </div>
-
-          <div className="rounded-2xl bg-slate-50 px-5 py-4">
-            <p className="text-sm font-medium text-slate-500">Estimated total</p>
-            <p className="mt-1 text-xl font-bold text-slate-950">
-              {currencyFormatter.format(estimatedOrderTotal)}
-            </p>
-          </div>
-        </div>
-
-        {hasCreateOrderDataError && (
-          <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-            <div className="flex gap-2">
-              <AlertTriangle size={18} />
-              <span>
-                {isCustomersError
-                  ? customerLoadErrorMessage
-                  : isProductsError
-                    ? productLoadErrorMessage
-                    : inventoryLoadErrorMessage}
-              </span>
-            </div>
-          </div>
-        )}
-
-        {!isCreateOrderDataLoading && !hasCreateOrderDataError && !hasAvailableProducts && (
-          <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
-            No products are available in inventory. Add products to inventory and update stock before creating an order.
-          </div>
-        )}
-
-        <div className="grid gap-4">
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Customer</span>
-            <select
-              value={createOrderForm.customerId}
-              onChange={(event) => handleCreateOrderCustomerChange(event.target.value)}
-              disabled={isCreateOrderDataLoading || hasCreateOrderDataError || !hasAvailableProducts}
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
-            >
-              <option value="">Select customer</option>
-              {customers.map((customer) => (
-                <option key={customer.id} value={customer.id}>
-                  {customer.name}
-                </option>
-              ))}
-            </select>
-          </label>
-
-          {createOrderValidationErrors.customerId && (
-            <p className="text-sm text-red-600">{createOrderValidationErrors.customerId}</p>
-          )}
-
-          <div className="space-y-3">
-            <div className="flex items-center justify-between gap-3">
-              <h4 className="text-sm font-semibold text-slate-950">Order items</h4>
-
-              <button
-                type="button"
-                onClick={handleAddOrderItem}
-                disabled={isCreateOrderDataLoading || hasCreateOrderDataError || !hasAvailableProducts}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
-              >
-                <Plus size={15} />
-                Add item
-              </button>
-            </div>
-
-            {createOrderForm.items.map((item, index) => {
-              const availableProduct = availableOrderProducts.find(
-                (currentProduct) => currentProduct.product.id === item.productId,
-              );
-
-              const product = availableProduct?.product;
-              const inventoryItem = availableProduct?.inventoryItem;
-              const lineTotal = product ? product.price * item.quantity : 0;
-
-              return (
-                <div
-                  key={`create-order-item-${index}`}
-                  className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[1fr_160px_160px_auto] lg:items-start"
-                >
-                  <div>
-                    <label className="block">
-                      <span className="text-sm font-medium text-slate-700">Product</span>
-                      <select
-                        value={item.productId}
-                        onChange={(event) => handleCreateOrderItemProductChange(index, event.target.value)}
-                        disabled={isCreateOrderDataLoading || hasCreateOrderDataError || !hasAvailableProducts}
-                        className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
-                      >
-                        <option value="">Select product</option>
-                        {availableOrderProducts.map((currentProduct) => (
-                          <option key={currentProduct.product.id} value={currentProduct.product.id}>
-                            {currentProduct.product.name} ({currentProduct.product.sku}) | In stock: {currentProduct.inventoryItem.quantityInStock}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-
-                    {createOrderValidationErrors[`items.${index}.productId`] && (
-                      <p className="mt-2 text-sm text-red-600">
-                        {createOrderValidationErrors[`items.${index}.productId`]}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className="block">
-                      <span className="text-sm font-medium text-slate-700">Quantity</span>
-                      <input
-                        type="number"
-                        min="1"
-                        max={inventoryItem?.quantityInStock ?? undefined}
-                        value={item.quantity}
-                        onChange={(event) =>
-                          handleCreateOrderItemQuantityChange(index, Number(event.target.value))
-                        }
-                        disabled={isCreateOrderDataLoading || hasCreateOrderDataError || !hasAvailableProducts}
-                        className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
-                      />
-                    </label>
-
-                    {inventoryItem && (
-                      <p className="mt-2 text-xs text-slate-500">
-                        Available: {inventoryItem.quantityInStock}
-                      </p>
-                    )}
-
-                    {createOrderValidationErrors[`items.${index}.quantity`] && (
-                      <p className="mt-2 text-sm text-red-600">
-                        {createOrderValidationErrors[`items.${index}.quantity`]}
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <p className="text-sm font-medium text-slate-700">Line total</p>
-                    <p className="mt-3 text-sm font-semibold text-slate-950">
-                      {currencyFormatter.format(lineTotal)}
-                    </p>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={() => handleRemoveOrderItem(index)}
-                    disabled={createOrderForm.items.length === 1}
-                    className="mt-7 inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
-                  >
-                    <Trash2 size={16} />
-                  </button>
+      {canManageOrders ? (
+        <>
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-slate-50 p-3 text-slate-600">
+                  <ReceiptText size={20} />
                 </div>
-              );
-            })}
-          </div>
 
-          {createOrderMutation.isError && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-              <div className="flex gap-2">
-                <AlertTriangle size={18} />
-                <span>{createOrderErrorMessage}</span>
+                <div>
+                  <h3 className="text-base font-semibold text-slate-950">Order summary</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Only products that are available in inventory can be selected for new orders.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 px-5 py-4">
+                <p className="text-sm font-medium text-slate-500">Total order value</p>
+                <p className="mt-1 text-2xl font-bold text-slate-950">
+                  {currencyFormatter.format(totalOrderValue)}
+                </p>
               </div>
             </div>
-          )}
+          </section>
 
-          <button
-            type="button"
-            onClick={handleCreateOrderSubmit}
-            disabled={
-              isCreateOrderPending ||
-              isCreateOrderDataLoading ||
-              hasCreateOrderDataError ||
-              !hasAvailableProducts
-            }
-            className="justify-self-start rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-          >
-            {isCreateOrderPending ? "Creating..." : "Create order"}
-          </button>
-        </div>
-      </section>
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-5 flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
+                  <ShoppingCart size={20} />
+                </div>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
-              <Settings size={20} />
+                <div>
+                  <h3 className="text-base font-semibold text-slate-950">Create order</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    Select a customer and products that are currently available in inventory.
+                  </p>
+                </div>
+              </div>
+
+              <div className="rounded-2xl bg-slate-50 px-5 py-4">
+                <p className="text-sm font-medium text-slate-500">Estimated total</p>
+                <p className="mt-1 text-xl font-bold text-slate-950">
+                  {currencyFormatter.format(estimatedOrderTotal)}
+                </p>
+              </div>
             </div>
 
-            <div>
-              <h3 className="text-base font-semibold text-slate-950">Order actions</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                {selectedOrder
-                  ? `Managing ${formatShortId(selectedOrder.id, "Order")} for ${selectedOrder.customerName}.`
-                  : "Select an order from the table to update status or cancel it."}
-              </p>
-            </div>
-          </div>
+            {hasCreateOrderDataError && (
+              <div className="mb-5 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                <div className="flex gap-2">
+                  <AlertTriangle size={18} />
+                  <span>
+                    {isCustomersError
+                      ? customerLoadErrorMessage
+                      : isProductsError
+                        ? productLoadErrorMessage
+                        : inventoryLoadErrorMessage}
+                  </span>
+                </div>
+              </div>
+            )}
 
-          {selectedOrder && (
-            <button
-              type="button"
-              onClick={handleClearSelectedOrder}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              <X size={16} />
-              Clear
-            </button>
-          )}
-        </div>
+            {!isCreateOrderDataLoading && !hasCreateOrderDataError && !hasAvailableProducts && (
+              <div className="mb-5 rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800">
+                No products are available in inventory. Add products to inventory and update stock before creating an order.
+              </div>
+            )}
 
-        {selectedOrder ? (
-          <div className="grid gap-4 lg:grid-cols-[1fr_auto_auto]">
-            <div>
+            <div className="grid gap-4">
               <label className="block">
-                <span className="text-sm font-medium text-slate-700">Order status</span>
+                <span className="text-sm font-medium text-slate-700">Customer</span>
                 <select
-                  value={selectedStatus}
-                  onChange={(event) => setSelectedStatus(event.target.value)}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                  value={createOrderForm.customerId}
+                  onChange={(event) => handleCreateOrderCustomerChange(event.target.value)}
+                  disabled={isCreateOrderDataLoading || hasCreateOrderDataError || !hasAvailableProducts}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
                 >
-                  {orderStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
+                  <option value="">Select customer</option>
+                  {customers.map((customer) => (
+                    <option key={customer.id} value={customer.id}>
+                      {customer.name}
                     </option>
                   ))}
                 </select>
               </label>
 
-              <p className="mt-2 text-sm text-slate-500">
-                Current status:{" "}
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(selectedOrder.status)}`}>
-                  {selectedOrder.status}
-                </span>
-              </p>
-            </div>
+              {createOrderValidationErrors.customerId && (
+                <p className="text-sm text-red-600">{createOrderValidationErrors.customerId}</p>
+              )}
 
-            <button
-              type="button"
-              onClick={handleUpdateStatus}
-              disabled={isActionPending || selectedStatus === selectedOrder.status}
-              className="self-end rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-            >
-              {updateStatusMutation.isPending ? "Updating..." : "Update status"}
-            </button>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between gap-3">
+                  <h4 className="text-sm font-semibold text-slate-950">Order items</h4>
 
-            <button
-              type="button"
-              onClick={handleCancelOrder}
-              disabled={isActionPending || !canCancelOrder(selectedOrder)}
-              className="self-end rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-            >
-              {cancelOrderMutation.isPending ? "Cancelling..." : "Cancel order"}
-            </button>
+                  <button
+                    type="button"
+                    onClick={handleAddOrderItem}
+                    disabled={isCreateOrderDataLoading || hasCreateOrderDataError || !hasAvailableProducts}
+                    className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50 disabled:cursor-not-allowed disabled:bg-slate-100"
+                  >
+                    <Plus size={15} />
+                    Add item
+                  </button>
+                </div>
 
-            {successMessage && (
-              <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 lg:col-span-3">
-                {successMessage}
+                {createOrderForm.items.map((item, index) => {
+                  const availableProduct = availableOrderProducts.find(
+                    (currentProduct) => currentProduct.product.id === item.productId,
+                  );
+
+                  const product = availableProduct?.product;
+                  const inventoryItem = availableProduct?.inventoryItem;
+                  const lineTotal = product ? product.price * item.quantity : 0;
+
+                  return (
+                    <div
+                      key={`create-order-item-${index}`}
+                      className="grid gap-3 rounded-2xl border border-slate-200 bg-slate-50 p-4 lg:grid-cols-[1fr_160px_160px_auto] lg:items-start"
+                    >
+                      <div>
+                        <label className="block">
+                          <span className="text-sm font-medium text-slate-700">Product</span>
+                          <select
+                            value={item.productId}
+                            onChange={(event) => handleCreateOrderItemProductChange(index, event.target.value)}
+                            disabled={isCreateOrderDataLoading || hasCreateOrderDataError || !hasAvailableProducts}
+                            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+                          >
+                            <option value="">Select product</option>
+                            {availableOrderProducts.map((currentProduct) => (
+                              <option key={currentProduct.product.id} value={currentProduct.product.id}>
+                                {currentProduct.product.name} ({currentProduct.product.sku}) | In stock: {currentProduct.inventoryItem.quantityInStock}
+                              </option>
+                            ))}
+                          </select>
+                        </label>
+
+                        {createOrderValidationErrors[`items.${index}.productId`] && (
+                          <p className="mt-2 text-sm text-red-600">
+                            {createOrderValidationErrors[`items.${index}.productId`]}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <label className="block">
+                          <span className="text-sm font-medium text-slate-700">Quantity</span>
+                          <input
+                            type="number"
+                            min="1"
+                            max={inventoryItem?.quantityInStock ?? undefined}
+                            value={item.quantity}
+                            onChange={(event) =>
+                              handleCreateOrderItemQuantityChange(index, Number(event.target.value))
+                            }
+                            disabled={isCreateOrderDataLoading || hasCreateOrderDataError || !hasAvailableProducts}
+                            className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:bg-slate-100"
+                          />
+                        </label>
+
+                        {inventoryItem && (
+                          <p className="mt-2 text-xs text-slate-500">
+                            Available: {inventoryItem.quantityInStock}
+                          </p>
+                        )}
+
+                        {createOrderValidationErrors[`items.${index}.quantity`] && (
+                          <p className="mt-2 text-sm text-red-600">
+                            {createOrderValidationErrors[`items.${index}.quantity`]}
+                          </p>
+                        )}
+                      </div>
+
+                      <div>
+                        <p className="text-sm font-medium text-slate-700">Line total</p>
+                        <p className="mt-3 text-sm font-semibold text-slate-950">
+                          {currencyFormatter.format(lineTotal)}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveOrderItem(index)}
+                        disabled={createOrderForm.items.length === 1}
+                        className="mt-7 inline-flex items-center justify-center rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-700 shadow-sm hover:bg-red-50 disabled:cursor-not-allowed disabled:border-slate-200 disabled:text-slate-300"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                    </div>
+                  );
+                })}
               </div>
-            )}
 
-            {hasActionError && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-3">
-                <div className="flex gap-2">
-                  <AlertTriangle size={18} />
-                  <span>{actionErrorMessage}</span>
+              {createOrderMutation.isError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+                  <div className="flex gap-2">
+                    <AlertTriangle size={18} />
+                    <span>{createOrderErrorMessage}</span>
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleCreateOrderSubmit}
+                disabled={
+                  isCreateOrderPending ||
+                  isCreateOrderDataLoading ||
+                  hasCreateOrderDataError ||
+                  !hasAvailableProducts
+                }
+                className="justify-self-start rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+              >
+                {isCreateOrderPending ? "Creating..." : "Create order"}
+              </button>
+            </div>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
+                  <Settings size={20} />
+                </div>
+
+                <div>
+                  <h3 className="text-base font-semibold text-slate-950">Order actions</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {selectedOrder
+                      ? `Managing ${formatShortId(selectedOrder.id, "Order")} for ${selectedOrder.customerName}.`
+                      : "Select an order from the table to update status or cancel it."}
+                  </p>
                 </div>
               </div>
-            )}
 
-            {!canCancelOrder(selectedOrder) && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 lg:col-span-3">
-                This order cannot be cancelled because it is already shipped, completed or cancelled.
+              {selectedOrder && (
+                <button
+                  type="button"
+                  onClick={handleClearSelectedOrder}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  <X size={16} />
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {selectedOrder ? (
+              <div className="grid gap-4 lg:grid-cols-[1fr_auto_auto]">
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-700">Order status</span>
+                    <select
+                      value={selectedStatus}
+                      onChange={(event) => setSelectedStatus(event.target.value)}
+                      className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                    >
+                      {orderStatuses.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <p className="mt-2 text-sm text-slate-500">
+                    Current status:{" "}
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(selectedOrder.status)}`}>
+                      {selectedOrder.status}
+                    </span>
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleUpdateStatus}
+                  disabled={isActionPending || selectedStatus === selectedOrder.status}
+                  className="self-end rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                >
+                  {updateStatusMutation.isPending ? "Updating..." : "Update status"}
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCancelOrder}
+                  disabled={isActionPending || !canCancelOrder(selectedOrder)}
+                  className="self-end rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                >
+                  {cancelOrderMutation.isPending ? "Cancelling..." : "Cancel order"}
+                </button>
+
+                {successMessage && (
+                  <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 lg:col-span-3">
+                    {successMessage}
+                  </div>
+                )}
+
+                {hasActionError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-3">
+                    <div className="flex gap-2">
+                      <AlertTriangle size={18} />
+                      <span>{actionErrorMessage}</span>
+                    </div>
+                  </div>
+                )}
+
+                {!canCancelOrder(selectedOrder) && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 lg:col-span-3">
+                    This order cannot be cancelled because it is already shipped, completed or cancelled.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
+                No order selected.
               </div>
             )}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
-            No order selected.
-          </div>
-        )}
-      </section>
+          </section>
+        </>
+      ) : (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-slate-950">Read only order access</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Your role can view orders and order details, but only Admin and WarehouseStaff users can create, update or cancel orders.
+          </p>
+        </section>
+      )}
 
       <section className="overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
         <div className="border-b border-slate-200 px-5 py-4">
@@ -926,14 +952,16 @@ export default function OrdersPage() {
                           </div>
 
                           <div className="flex justify-end gap-2 px-5 py-4">
-                            <button
-                              type="button"
-                              onClick={() => handleSelectOrder(order)}
-                              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                            >
-                              <Settings size={15} />
-                              Manage
-                            </button>
+                            {canManageOrders && (
+                              <button
+                                type="button"
+                                onClick={() => handleSelectOrder(order)}
+                                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                              >
+                                <Settings size={15} />
+                                Manage
+                              </button>
+                            )}
 
                             <button
                               type="button"
