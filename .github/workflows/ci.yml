@@ -50,7 +50,7 @@ jobs:
           cache-dependency-path: frontend/warehouseops-client/package-lock.json
 
       - name: Install frontend dependencies
-        run: npm ci
+        run: npm install
         working-directory: frontend/warehouseops-client
 
       - name: Build frontend
