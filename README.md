@@ -62,6 +62,51 @@ The goal of the project is to demonstrate practical skills in .NET, React, SQL S
 * Docker Compose setup with SQL Server, backend and frontend
 * Demo seed data for a B2B technology warehouse scenario
 
+## Screenshots
+
+### Login
+
+![Login](docs/screenshots/Login.png)
+
+### Dashboard
+
+![Dashboard](docs/screenshots/Dashboard.png)
+
+### Products
+
+![Products](docs/screenshots/Products.png)
+
+### Inventory
+
+![Inventory](docs/screenshots/Inventory.png)
+
+### Customers
+
+![Customers](docs/screenshots/Customers.png)
+
+### Orders
+
+![Orders](docs/screenshots/Orders.png)
+
+### Shipments
+
+![Shipments](docs/screenshots/Shipments.png)
+
+### Incidents
+
+![Incidents](docs/screenshots/Incidents.png)
+
+### Change History
+
+![Change History](docs/screenshots/ChangeHistory.png)
+
+### GitHub Actions CI
+
+![GitHub Actions CI](docs/screenshots/github-actions.png)
+
+### Docker Compose
+
+![Docker Compose](docs/screenshots/docker-compose.png)
 ## Business scenario
 
 WarehouseOps is designed around a fictional technology import company.
