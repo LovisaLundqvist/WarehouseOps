@@ -46,7 +46,7 @@ public class IncidentsController : ControllerBase
         return Ok(incident);
     }
 
-    [Authorize(Roles = RoleNames.AllRoles)]
+    [Authorize(Roles = RoleNames.AdminOrWarehouseStaff)]
     [HttpPost]
     public async Task<ActionResult<IncidentDto>> Create(CreateIncidentRequest request)
     {

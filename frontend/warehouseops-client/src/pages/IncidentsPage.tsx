@@ -13,6 +13,7 @@ import {
 } from "lucide-react";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import { z } from "zod";
+import { useAuth } from "../auth/AuthContext";
 import {
   createIncident,
   getIncidents,
@@ -38,7 +39,10 @@ const createIncidentSchema = z
     description: z.string().trim().min(1, "Description is required."),
     severity: z.string().trim().min(1, "Severity is required."),
     relatedEntityType: z.string().trim().min(1, "Area is required."),
-    relatedEntityId: z.string().trim().max(100, "Reference number cannot be longer than 100 characters."),
+    relatedEntityId: z
+      .string()
+      .trim()
+      .max(100, "Reference number cannot be longer than 100 characters."),
   })
   .refine(
     (values) => values.relatedEntityType === "General" || values.relatedEntityId.trim().length > 0,
@@ -106,6 +110,9 @@ function formatRelatedEntity(incident: Incident) {
 
 export default function IncidentsPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  const canManageIncidents = user?.role === "Admin" || user?.role === "WarehouseStaff";
 
   const [draftFilters, setDraftFilters] = useState<IncidentFilters>({
     status: "",
@@ -147,6 +154,7 @@ export default function IncidentsPage() {
       setSuccessMessage(`${createdIncident.title} was reported.`);
       reset(initialCreateIncidentValues);
       queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
   });
 
@@ -158,6 +166,7 @@ export default function IncidentsPage() {
       setSelectedIncident(updatedIncident);
       setSelectedStatus(updatedIncident.status);
       queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
   });
 
@@ -171,6 +180,7 @@ export default function IncidentsPage() {
       setResolutionNotes("");
       setResolutionValidationMessage("");
       queryClient.invalidateQueries({ queryKey: ["incidents"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
   });
 
@@ -214,6 +224,10 @@ export default function IncidentsPage() {
   }
 
   const handleCreateIncident: SubmitHandler<CreateIncidentFormValues> = (values) => {
+    if (!canManageIncidents) {
+      return;
+    }
+
     setSuccessMessage("");
     createIncidentMutation.reset();
 
@@ -229,6 +243,10 @@ export default function IncidentsPage() {
   };
 
   function handleSelectIncident(incident: Incident) {
+    if (!canManageIncidents) {
+      return;
+    }
+
     setSuccessMessage("");
     setResolutionValidationMessage("");
     updateStatusMutation.reset();
@@ -253,7 +271,7 @@ export default function IncidentsPage() {
   }
 
   function handleUpdateStatus() {
-    if (!selectedIncident || !selectedStatus) {
+    if (!canManageIncidents || !selectedIncident || !selectedStatus) {
       return;
     }
 
@@ -269,7 +287,7 @@ export default function IncidentsPage() {
   }
 
   function handleResolveIncident() {
-    if (!selectedIncident) {
+    if (!canManageIncidents || !selectedIncident) {
       return;
     }
 
@@ -307,7 +325,7 @@ export default function IncidentsPage() {
           </div>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500">
-            Report operational issues, connect them to the affected area and close them with resolution notes.
+            View operational issues, affected areas and current handling status. Incident changes are available based on your role.
           </p>
         </div>
 
@@ -329,230 +347,241 @@ export default function IncidentsPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-5 flex items-center gap-3">
-          <div className="rounded-xl bg-red-50 p-3 text-red-600">
-            <Plus size={20} />
-          </div>
+      {canManageIncidents ? (
+        <>
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-5 flex items-center gap-3">
+              <div className="rounded-xl bg-red-50 p-3 text-red-600">
+                <Plus size={20} />
+              </div>
 
-          <div>
-            <h3 className="text-base font-semibold text-slate-950">Report incident</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Create a new incident and connect it to a product, stock item, customer, order or shipment when needed.
-            </p>
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit(handleCreateIncident)} className="grid gap-4 lg:grid-cols-3">
-          <label className="block lg:col-span-2">
-            <span className="text-sm font-medium text-slate-700">Title</span>
-            <input
-              {...register("title")}
-              placeholder="Example: Damaged package"
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-            {errors.title && <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>}
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Severity</span>
-            <select
-              {...register("severity")}
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            >
-              {incidentSeverities.map((severity) => (
-                <option key={severity} value={severity}>
-                  {severity}
-                </option>
-              ))}
-            </select>
-            {errors.severity && (
-              <p className="mt-1 text-sm text-red-600">{errors.severity.message}</p>
-            )}
-          </label>
-
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Area</span>
-            <select
-              {...register("relatedEntityType")}
-              className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            >
-              {relatedEntityTypes.map((type) => (
-                <option key={type} value={type}>
-                  {type}
-                </option>
-              ))}
-            </select>
-            {errors.relatedEntityType && (
-              <p className="mt-1 text-sm text-red-600">{errors.relatedEntityType.message}</p>
-            )}
-          </label>
-
-          <label className="block lg:col-span-2">
-            <span className="text-sm font-medium text-slate-700">Reference number</span>
-            <input
-              {...register("relatedEntityId")}
-              placeholder="Example: order number, product code or tracking number"
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-            {errors.relatedEntityId && (
-              <p className="mt-1 text-sm text-red-600">{errors.relatedEntityId.message}</p>
-            )}
-          </label>
-
-          <label className="block lg:col-span-3">
-            <span className="text-sm font-medium text-slate-700">Description</span>
-            <textarea
-              {...register("description")}
-              rows={4}
-              placeholder="Describe what happened and what needs attention."
-              className="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-            {errors.description && (
-              <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>
-            )}
-          </label>
-
-          {successMessage && (
-            <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 lg:col-span-3">
-              {successMessage}
-            </div>
-          )}
-
-          {createIncidentMutation.isError && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-3">
-              {createErrorMessage}
-            </div>
-          )}
-
-          <div className="flex justify-end lg:col-span-3">
-            <button
-              type="submit"
-              disabled={createIncidentMutation.isPending}
-              className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
-            >
-              {createIncidentMutation.isPending ? "Reporting..." : "Report incident"}
-            </button>
-          </div>
-        </form>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
-              <Settings size={20} />
+              <div>
+                <h3 className="text-base font-semibold text-slate-950">Report incident</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  Create a new incident and connect it to a product, stock item, customer, order or shipment when needed.
+                </p>
+              </div>
             </div>
 
-            <div>
-              <h3 className="text-base font-semibold text-slate-950">Incident actions</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                {selectedIncident
-                  ? `Managing incident ${selectedIncident.title}.`
-                  : "Select an incident from the table to update or close it."}
-              </p>
-            </div>
-          </div>
+            <form onSubmit={handleSubmit(handleCreateIncident)} className="grid gap-4 lg:grid-cols-3">
+              <label className="block lg:col-span-2">
+                <span className="text-sm font-medium text-slate-700">Title</span>
+                <input
+                  {...register("title")}
+                  placeholder="Example: Damaged package"
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+                {errors.title && <p className="mt-1 text-sm text-red-600">{errors.title.message}</p>}
+              </label>
 
-          {selectedIncident && (
-            <button
-              type="button"
-              onClick={handleClearSelectedIncident}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              <X size={16} />
-              Clear
-            </button>
-          )}
-        </div>
-
-        {selectedIncident ? (
-          <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
-            <div>
               <label className="block">
-                <span className="text-sm font-medium text-slate-700">Incident status</span>
+                <span className="text-sm font-medium text-slate-700">Severity</span>
                 <select
-                  value={selectedStatus}
-                  onChange={(event) => setSelectedStatus(event.target.value)}
-                  disabled={!canManageIncident(selectedIncident)}
-                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                  {...register("severity")}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 >
-                  {incidentStatuses.map((status) => (
-                    <option key={status} value={status}>
-                      {status}
+                  {incidentSeverities.map((severity) => (
+                    <option key={severity} value={severity}>
+                      {severity}
                     </option>
                   ))}
                 </select>
+                {errors.severity && (
+                  <p className="mt-1 text-sm text-red-600">{errors.severity.message}</p>
+                )}
               </label>
 
-              <p className="mt-2 text-sm text-slate-500">
-                Current status:{" "}
-                <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(selectedIncident.status)}`}>
-                  {selectedIncident.status}
-                </span>
-              </p>
-            </div>
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Area</span>
+                <select
+                  {...register("relatedEntityType")}
+                  className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+                  {relatedEntityTypes.map((type) => (
+                    <option key={type} value={type}>
+                      {type}
+                    </option>
+                  ))}
+                </select>
+                {errors.relatedEntityType && (
+                  <p className="mt-1 text-sm text-red-600">{errors.relatedEntityType.message}</p>
+                )}
+              </label>
 
-            <button
-              type="button"
-              onClick={handleUpdateStatus}
-              disabled={
-                updateStatusMutation.isPending ||
-                !canManageIncident(selectedIncident) ||
-                selectedStatus === selectedIncident.status
-              }
-              className="self-end rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-            >
-              {updateStatusMutation.isPending ? "Updating..." : "Update status"}
-            </button>
+              <label className="block lg:col-span-2">
+                <span className="text-sm font-medium text-slate-700">Reference number</span>
+                <input
+                  {...register("relatedEntityId")}
+                  placeholder="Example: order number, product code or tracking number"
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+                {errors.relatedEntityId && (
+                  <p className="mt-1 text-sm text-red-600">{errors.relatedEntityId.message}</p>
+                )}
+              </label>
 
-            <label className="block lg:col-span-2">
-              <span className="text-sm font-medium text-slate-700">Resolution notes</span>
-              <textarea
-                value={resolutionNotes}
-                onChange={(event) => setResolutionNotes(event.target.value)}
-                disabled={!canManageIncident(selectedIncident)}
-                rows={3}
-                placeholder="Required when closing an incident."
-                className="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
-              />
-              {resolutionValidationMessage && (
-                <p className="mt-1 text-sm text-red-600">{resolutionValidationMessage}</p>
+              <label className="block lg:col-span-3">
+                <span className="text-sm font-medium text-slate-700">Description</span>
+                <textarea
+                  {...register("description")}
+                  rows={4}
+                  placeholder="Describe what happened and what needs attention."
+                  className="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+                {errors.description && (
+                  <p className="mt-1 text-sm text-red-600">{errors.description.message}</p>
+                )}
+              </label>
+
+              {successMessage && (
+                <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 lg:col-span-3">
+                  {successMessage}
+                </div>
               )}
-            </label>
 
-            <div className="flex justify-end lg:col-span-2">
-              <button
-                type="button"
-                onClick={handleResolveIncident}
-                disabled={resolveIncidentMutation.isPending || !canManageIncident(selectedIncident)}
-                className="rounded-xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
-              >
-                {resolveIncidentMutation.isPending ? "Closing..." : "Close incident"}
-              </button>
-            </div>
+              {createIncidentMutation.isError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-3">
+                  {createErrorMessage}
+                </div>
+              )}
 
-            {hasActionError && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-2">
-                <div className="flex gap-2">
-                  <AlertTriangle size={18} />
-                  <span>{actionErrorMessage}</span>
+              <div className="flex justify-end lg:col-span-3">
+                <button
+                  type="submit"
+                  disabled={createIncidentMutation.isPending}
+                  className="rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-red-700 disabled:cursor-not-allowed disabled:bg-red-300"
+                >
+                  {createIncidentMutation.isPending ? "Reporting..." : "Report incident"}
+                </button>
+              </div>
+            </form>
+          </section>
+
+          <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+            <div className="mb-5 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-3">
+                <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
+                  <Settings size={20} />
+                </div>
+
+                <div>
+                  <h3 className="text-base font-semibold text-slate-950">Incident actions</h3>
+                  <p className="mt-1 text-sm text-slate-500">
+                    {selectedIncident
+                      ? `Managing incident ${selectedIncident.title}.`
+                      : "Select an incident from the table to update or close it."}
+                  </p>
                 </div>
               </div>
-            )}
 
-            {!canManageIncident(selectedIncident) && (
-              <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 lg:col-span-2">
-                This incident cannot be changed because it is already closed.
+              {selectedIncident && (
+                <button
+                  type="button"
+                  onClick={handleClearSelectedIncident}
+                  className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  <X size={16} />
+                  Clear
+                </button>
+              )}
+            </div>
+
+            {selectedIncident ? (
+              <div className="grid gap-4 lg:grid-cols-[1fr_auto]">
+                <div>
+                  <label className="block">
+                    <span className="text-sm font-medium text-slate-700">Incident status</span>
+                    <select
+                      value={selectedStatus}
+                      onChange={(event) => setSelectedStatus(event.target.value)}
+                      disabled={!canManageIncident(selectedIncident)}
+                      className="mt-2 w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500"
+                    >
+                      {incidentStatuses.map((status) => (
+                        <option key={status} value={status}>
+                          {status}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+
+                  <p className="mt-2 text-sm text-slate-500">
+                    Current status:{" "}
+                    <span className={`rounded-full px-3 py-1 text-xs font-semibold ${getStatusBadgeClass(selectedIncident.status)}`}>
+                      {selectedIncident.status}
+                    </span>
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={handleUpdateStatus}
+                  disabled={
+                    updateStatusMutation.isPending ||
+                    !canManageIncident(selectedIncident) ||
+                    selectedStatus === selectedIncident.status
+                  }
+                  className="self-end rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                >
+                  {updateStatusMutation.isPending ? "Updating..." : "Update status"}
+                </button>
+
+                <label className="block lg:col-span-2">
+                  <span className="text-sm font-medium text-slate-700">Resolution notes</span>
+                  <textarea
+                    value={resolutionNotes}
+                    onChange={(event) => setResolutionNotes(event.target.value)}
+                    disabled={!canManageIncident(selectedIncident)}
+                    rows={3}
+                    placeholder="Required when closing an incident."
+                    className="mt-2 w-full resize-none rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100"
+                  />
+                  {resolutionValidationMessage && (
+                    <p className="mt-1 text-sm text-red-600">{resolutionValidationMessage}</p>
+                  )}
+                </label>
+
+                <div className="flex justify-end lg:col-span-2">
+                  <button
+                    type="button"
+                    onClick={handleResolveIncident}
+                    disabled={resolveIncidentMutation.isPending || !canManageIncident(selectedIncident)}
+                    className="rounded-xl bg-green-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-green-700 disabled:cursor-not-allowed disabled:bg-green-300"
+                  >
+                    {resolveIncidentMutation.isPending ? "Closing..." : "Close incident"}
+                  </button>
+                </div>
+
+                {hasActionError && (
+                  <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-2">
+                    <div className="flex gap-2">
+                      <AlertTriangle size={18} />
+                      <span>{actionErrorMessage}</span>
+                    </div>
+                  </div>
+                )}
+
+                {!canManageIncident(selectedIncident) && (
+                  <div className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-800 lg:col-span-2">
+                    This incident cannot be changed because it is already closed.
+                  </div>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
+                No incident selected.
               </div>
             )}
-          </div>
-        ) : (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
-            No incident selected.
-          </div>
-        )}
-      </section>
+          </section>
+        </>
+      ) : (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-slate-950">Read only incident access</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Your role can view incidents, but only Admin and WarehouseStaff users can report incidents, update status or close incidents.
+          </p>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <form onSubmit={handleFilterSubmit} className="grid gap-4 lg:grid-cols-[1fr_auto_auto]">
@@ -645,9 +674,11 @@ export default function IncidentsPage() {
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Created
                   </th>
-                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Actions
-                  </th>
+                  {canManageIncidents && (
+                    <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Actions
+                    </th>
+                  )}
                 </tr>
               </thead>
 
@@ -665,7 +696,9 @@ export default function IncidentsPage() {
                           <p className="mt-1 max-w-xl text-sm text-slate-500">
                             {incident.description}
                           </p>
-                          <p className="mt-1 text-xs text-slate-400">{formatShortId(incident.id, "Incident")}</p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            {formatShortId(incident.id, "Incident")}
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -717,16 +750,18 @@ export default function IncidentsPage() {
                       {new Date(incident.createdAt).toLocaleDateString("sv-SE")}
                     </td>
 
-                    <td className="whitespace-nowrap px-5 py-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleSelectIncident(incident)}
-                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                      >
-                        <Settings size={15} />
-                        Manage
-                      </button>
-                    </td>
+                    {canManageIncidents && (
+                      <td className="whitespace-nowrap px-5 py-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleSelectIncident(incident)}
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                        >
+                          <Settings size={15} />
+                          Manage
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -737,5 +772,3 @@ export default function IncidentsPage() {
     </div>
   );
 }
-
-
