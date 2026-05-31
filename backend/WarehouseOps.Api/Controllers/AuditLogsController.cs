@@ -1,9 +1,12 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using WarehouseOps.Api.Security;
 using WarehouseOps.Application.Dtos;
 using WarehouseOps.Application.Interfaces;
 
 namespace WarehouseOps.Api.Controllers;
 
+[Authorize(Roles = RoleNames.AdminOrManager)]
 [ApiController]
 [Route("api/[controller]")]
 public class AuditLogsController : ControllerBase

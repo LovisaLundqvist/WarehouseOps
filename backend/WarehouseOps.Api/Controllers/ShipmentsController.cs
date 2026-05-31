@@ -1,9 +1,12 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using WarehouseOps.Api.Security;
 using WarehouseOps.Application.Dtos;
 using WarehouseOps.Application.Interfaces;
 
 namespace WarehouseOps.Api.Controllers;
 
+[Authorize(Roles = RoleNames.AllRoles)]
 [ApiController]
 [Route("api/[controller]")]
 public class ShipmentsController : ControllerBase
@@ -36,6 +39,7 @@ public class ShipmentsController : ControllerBase
         return Ok(shipment);
     }
 
+    [Authorize(Roles = RoleNames.AdminOrWarehouseStaff)]
     [HttpPost]
     public async Task<ActionResult<ShipmentDto>> Create(CreateShipmentRequest request)
     {
@@ -55,6 +59,7 @@ public class ShipmentsController : ControllerBase
         }
     }
 
+    [Authorize(Roles = RoleNames.AdminOrWarehouseStaff)]
     [HttpPut("{id:guid}/status")]
     public async Task<ActionResult<ShipmentDto>> UpdateStatus(Guid id, UpdateShipmentStatusRequest request)
     {

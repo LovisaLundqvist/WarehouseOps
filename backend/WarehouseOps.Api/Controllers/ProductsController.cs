@@ -1,9 +1,12 @@
-﻿using Microsoft.AspNetCore.Mvc;
+﻿using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
+using WarehouseOps.Api.Security;
 using WarehouseOps.Application.Dtos;
 using WarehouseOps.Application.Interfaces;
 
 namespace WarehouseOps.Api.Controllers;
 
+[Authorize(Roles = RoleNames.AllRoles)]
 [ApiController]
 [Route("api/[controller]")]
 public class ProductsController : ControllerBase
@@ -38,6 +41,7 @@ public class ProductsController : ControllerBase
         return Ok(product);
     }
 
+    [Authorize(Roles = RoleNames.Admin)]
     [HttpPost]
     public async Task<ActionResult<ProductDto>> Create(CreateProductRequest request)
     {
@@ -57,6 +61,7 @@ public class ProductsController : ControllerBase
         }
     }
 
+    [Authorize(Roles = RoleNames.Admin)]
     [HttpPut("{id:guid}")]
     public async Task<ActionResult<ProductDto>> Update(Guid id, UpdateProductRequest request)
     {
@@ -81,6 +86,7 @@ public class ProductsController : ControllerBase
         }
     }
 
+    [Authorize(Roles = RoleNames.Admin)]
     [HttpDelete("{id:guid}")]
     public async Task<IActionResult> Delete(Guid id)
     {
