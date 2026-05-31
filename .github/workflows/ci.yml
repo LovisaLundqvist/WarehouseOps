@@ -1,0 +1,58 @@
+﻿name: WarehouseOps CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+
+jobs:
+  backend:
+    name: Backend build and tests
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up .NET
+        uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Restore backend dependencies
+        run: dotnet restore
+        working-directory: backend
+
+      - name: Build backend
+        run: dotnet build --configuration Release --no-restore
+        working-directory: backend
+
+      - name: Run backend tests
+        run: dotnet test --configuration Release --no-build
+        working-directory: backend
+
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/warehouseops-client/package-lock.json
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend/warehouseops-client
+
+      - name: Build frontend
+        run: npm run build
+        working-directory: frontend/warehouseops-client
