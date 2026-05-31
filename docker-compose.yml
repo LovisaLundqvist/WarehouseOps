@@ -1,0 +1,49 @@
+﻿services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: warehouseops-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: ${SA_PASSWORD}
+      MSSQL_PID: Developer
+    volumes:
+      - warehouseops_sqlserver_data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "pidof sqlservr || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: warehouseops-api
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: Server=sqlserver,1433;Database=WarehouseOpsDb;User Id=sa;Password=${SA_PASSWORD};TrustServerCertificate=True;MultipleActiveResultSets=true
+      Jwt__SecretKey: ${JWT_SECRET_KEY}
+      Jwt__Issuer: WarehouseOps.Api
+      Jwt__Audience: WarehouseOps.Client
+      Jwt__ExpirationMinutes: "120"
+      Database__AutoMigrate: "true"
+      Database__SeedDemoData: "true"
+    ports:
+      - "127.0.0.1:5059:8080"
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+
+  frontend:
+    build:
+      context: ./frontend/warehouseops-client
+      dockerfile: Dockerfile
+    container_name: warehouseops-client
+    ports:
+      - "127.0.0.1:3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  warehouseops_sqlserver_data:

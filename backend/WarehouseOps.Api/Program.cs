@@ -45,7 +45,9 @@ builder.Services.AddCors(options =>
     options.AddPolicy(frontendCorsPolicy, policy =>
     {
         policy
-            .WithOrigins("http://localhost:5173")
+            .WithOrigins(
+                "http://localhost:5173",
+                "http://localhost:3000")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
@@ -123,6 +125,16 @@ var app = builder.Build();
 
 app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
 
+if (app.Configuration.GetValue<bool>("Database:AutoMigrate"))
+{
+    await ApplyDatabaseMigrationsAsync(app);
+}
+
+if (app.Configuration.GetValue<bool>("Database:SeedDemoData"))
+{
+    await SeedDemoDataAsync(app);
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -141,3 +153,49 @@ app.UseAuthorization();
 app.MapControllers();
 
 app.Run();
+
+static async Task ApplyDatabaseMigrationsAsync(WebApplication app)
+{
+    using var scope = app.Services.CreateScope();
+
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+    const int maxAttempts = 10;
+
+    for (var attempt = 1; attempt <= maxAttempts; attempt++)
+    {
+        try
+        {
+            await dbContext.Database.MigrateAsync();
+
+            logger.LogInformation("Database migrations were applied successfully.");
+
+            return;
+        }
+        catch (Exception exception) when (attempt < maxAttempts)
+        {
+            logger.LogWarning(
+                exception,
+                "Database migration attempt {Attempt} of {MaxAttempts} failed. Retrying in 5 seconds.",
+                attempt,
+                maxAttempts);
+
+            await Task.Delay(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    await dbContext.Database.MigrateAsync();
+}
+
+static async Task SeedDemoDataAsync(WebApplication app)
+{
+    using var scope = app.Services.CreateScope();
+
+    var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
+    var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+
+    await DatabaseSeeder.SeedDemoDataAsync(dbContext);
+
+    logger.LogInformation("Demo seed data was checked successfully.");
+}

@@ -2,6 +2,9 @@
 obj/
 .vs/
 
+# Local environment files
+.env
+
 # Frontend
 frontend/warehouseops-client/node_modules/
 frontend/warehouseops-client/dist/
