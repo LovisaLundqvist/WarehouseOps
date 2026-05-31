@@ -7,10 +7,14 @@ namespace WarehouseOps.Application.Services;
 public class AuditLogService : IAuditLogService
 {
     private readonly IAuditLogRepository _auditLogRepository;
+    private readonly ICurrentUserService _currentUserService;
 
-    public AuditLogService(IAuditLogRepository auditLogRepository)
+    public AuditLogService(
+        IAuditLogRepository auditLogRepository,
+        ICurrentUserService currentUserService)
     {
         _auditLogRepository = auditLogRepository;
+        _currentUserService = currentUserService;
     }
 
     public async Task<List<AuditLogDto>> GetAllAsync()
@@ -37,13 +41,14 @@ public class AuditLogService : IAuditLogService
     public async Task LogAsync(string entityName, string action, string performedBy, string changes)
     {
         var now = DateTime.UtcNow;
+        var resolvedPerformedBy = ResolvePerformedBy(performedBy);
 
         var auditLog = new AuditLog
         {
             Id = Guid.NewGuid(),
             EntityName = entityName.Trim(),
             Action = action.Trim(),
-            PerformedBy = string.IsNullOrWhiteSpace(performedBy) ? "System" : performedBy.Trim(),
+            PerformedBy = resolvedPerformedBy,
             PerformedAt = now,
             Changes = changes.Trim(),
             CreatedAt = now
@@ -52,6 +57,17 @@ public class AuditLogService : IAuditLogService
         await _auditLogRepository.AddAsync(auditLog);
 
         await _auditLogRepository.SaveChangesAsync();
+    }
+
+    private string ResolvePerformedBy(string performedBy)
+    {
+        if (!string.IsNullOrWhiteSpace(performedBy) &&
+            !performedBy.Equals("System", StringComparison.OrdinalIgnoreCase))
+        {
+            return performedBy.Trim();
+        }
+
+        return _currentUserService.GetCurrentUserDisplayName();
     }
 
     private static AuditLogDto MapToDto(AuditLog auditLog)
