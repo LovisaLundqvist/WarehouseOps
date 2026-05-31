@@ -14,6 +14,7 @@ import {
 } from "lucide-react";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import { z } from "zod";
+import { useAuth } from "../auth/AuthContext";
 import { createCustomer, getCustomers, updateCustomer } from "../api/customersApi";
 import type {
   CreateCustomerRequest,
@@ -22,6 +23,7 @@ import type {
   UpdateCustomerRequest,
 } from "../types/customer";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
+import { formatShortId } from "../utils/formatShortId";
 
 const customerSchema = z.object({
   name: z.string().trim().min(1, "Name is required."),
@@ -41,6 +43,9 @@ const initialCustomerFormValues: CustomerFormValues = {
 
 export default function CustomersPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  const canManageCustomers = user?.role === "Admin" || user?.role === "WarehouseStaff";
 
   const [draftFilters, setDraftFilters] = useState<CustomerFilters>({
     search: "",
@@ -82,6 +87,7 @@ export default function CustomersPage() {
       setSuccessMessage(`${createdCustomer.name} was created.`);
       reset(initialCustomerFormValues);
       queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
   });
 
@@ -94,6 +100,7 @@ export default function CustomersPage() {
       setEditingCustomerName("");
       reset(initialCustomerFormValues);
       queryClient.invalidateQueries({ queryKey: ["customers"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
   });
 
@@ -115,6 +122,10 @@ export default function CustomersPage() {
   }
 
   function handleStartEdit(customer: Customer) {
+    if (!canManageCustomers) {
+      return;
+    }
+
     setSuccessMessage("");
     createCustomerMutation.reset();
     updateCustomerMutation.reset();
@@ -143,6 +154,10 @@ export default function CustomersPage() {
   }
 
   const handleSaveCustomer: SubmitHandler<CustomerFormValues> = (values) => {
+    if (!canManageCustomers) {
+      return;
+    }
+
     setSuccessMessage("");
     createCustomerMutation.reset();
     updateCustomerMutation.reset();
@@ -192,7 +207,7 @@ export default function CustomersPage() {
           </div>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500">
-            Create, update and view customers that can be connected to warehouse orders.
+            View customers that can be connected to warehouse orders. Customer changes are available based on your role.
           </p>
         </div>
 
@@ -202,105 +217,114 @@ export default function CustomersPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
-              {isEditing ? <Pencil size={20} /> : <Plus size={20} />}
+      {canManageCustomers ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
+                {isEditing ? <Pencil size={20} /> : <Plus size={20} />}
+              </div>
+
+              <div>
+                <h3 className="text-base font-semibold text-slate-950">
+                  {isEditing ? "Update customer" : "Create customer"}
+                </h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  {isEditing
+                    ? `Editing ${editingCustomerName}. Save changes or cancel editing.`
+                    : "Add a new customer to the customer register."}
+                </p>
+              </div>
             </div>
 
-            <div>
-              <h3 className="text-base font-semibold text-slate-950">
-                {isEditing ? "Update customer" : "Create customer"}
-              </h3>
-              <p className="mt-1 text-sm text-slate-500">
-                {isEditing
-                  ? `Editing ${editingCustomerName}. Save changes or cancel editing.`
-                  : "Add a new customer to the customer register."}
-              </p>
-            </div>
+            {isEditing && (
+              <button
+                type="button"
+                onClick={handleCancelEdit}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+              >
+                <X size={16} />
+                Cancel edit
+              </button>
+            )}
           </div>
 
-          {isEditing && (
-            <button
-              type="button"
-              onClick={handleCancelEdit}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              <X size={16} />
-              Cancel edit
-            </button>
-          )}
-        </div>
+          <form onSubmit={handleSubmit(handleSaveCustomer)} className="grid gap-4 lg:grid-cols-2">
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Name</span>
+              <input
+                {...register("name")}
+                placeholder="Example: Nordic Retail AB"
+                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
+            </label>
 
-        <form onSubmit={handleSubmit(handleSaveCustomer)} className="grid gap-4 lg:grid-cols-2">
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Name</span>
-            <input
-              {...register("name")}
-              placeholder="Example: Nordic Retail AB"
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-            {errors.name && <p className="mt-1 text-sm text-red-600">{errors.name.message}</p>}
-          </label>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Email</span>
+              <input
+                {...register("email")}
+                placeholder="Example: logistics@nordic-retail.se"
+                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+              {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
+            </label>
 
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Email</span>
-            <input
-              {...register("email")}
-              placeholder="Example: logistics@nordic-retail.se"
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-            {errors.email && <p className="mt-1 text-sm text-red-600">{errors.email.message}</p>}
-          </label>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Phone number</span>
+              <input
+                {...register("phoneNumber")}
+                placeholder="Example: +46 31 123 456"
+                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
 
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Phone number</span>
-            <input
-              {...register("phoneNumber")}
-              placeholder="Example: +46 31 123 456"
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </label>
+            <label className="block">
+              <span className="text-sm font-medium text-slate-700">Address</span>
+              <input
+                {...register("address")}
+                placeholder="Example: Lagergatan 12, Göteborg"
+                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              />
+            </label>
 
-          <label className="block">
-            <span className="text-sm font-medium text-slate-700">Address</span>
-            <input
-              {...register("address")}
-              placeholder="Example: Lagergatan 12, Göteborg"
-              className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-            />
-          </label>
+            {successMessage && (
+              <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 lg:col-span-2">
+                {successMessage}
+              </div>
+            )}
 
-          {successMessage && (
-            <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 lg:col-span-2">
-              {successMessage}
+            {hasSaveError && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-2">
+                {saveErrorMessage}
+              </div>
+            )}
+
+            <div className="flex justify-end lg:col-span-2">
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+              >
+                {isSaving
+                  ? isEditing
+                    ? "Updating..."
+                    : "Creating..."
+                  : isEditing
+                    ? "Update customer"
+                    : "Create customer"}
+              </button>
             </div>
-          )}
-
-          {hasSaveError && (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-2">
-              {saveErrorMessage}
-            </div>
-          )}
-
-          <div className="flex justify-end lg:col-span-2">
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
-            >
-              {isSaving
-                ? isEditing
-                  ? "Updating..."
-                  : "Creating..."
-                : isEditing
-                  ? "Update customer"
-                  : "Create customer"}
-            </button>
-          </div>
-        </form>
-      </section>
+          </form>
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-slate-950">Read only customer access</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Your role can view customers, but only Admin and WarehouseStaff users can create or update customer records.
+          </p>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <form onSubmit={handleFilterSubmit} className="grid gap-4 lg:grid-cols-[1fr_auto_auto]">
@@ -382,9 +406,11 @@ export default function CustomersPage() {
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Created
                   </th>
-                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Actions
-                  </th>
+                  {canManageCustomers && (
+                    <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Actions
+                    </th>
+                  )}
                 </tr>
               </thead>
 
@@ -399,7 +425,9 @@ export default function CustomersPage() {
 
                         <div>
                           <p className="text-sm font-semibold text-slate-950">{customer.name}</p>
-                          <p className="mt-1 text-xs text-slate-500">{customer.id}</p>
+                          <p className="mt-1 text-xs text-slate-500">
+                            {formatShortId(customer.id, "Customer")}
+                          </p>
                         </div>
                       </div>
                     </td>
@@ -428,16 +456,18 @@ export default function CustomersPage() {
                       {new Date(customer.createdAt).toLocaleDateString("sv-SE")}
                     </td>
 
-                    <td className="whitespace-nowrap px-5 py-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleStartEdit(customer)}
-                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                      >
-                        <Pencil size={15} />
-                        Edit
-                      </button>
-                    </td>
+                    {canManageCustomers && (
+                      <td className="whitespace-nowrap px-5 py-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleStartEdit(customer)}
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                        >
+                          <Pencil size={15} />
+                          Edit
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -448,4 +478,3 @@ export default function CustomersPage() {
     </div>
   );
 }
-
