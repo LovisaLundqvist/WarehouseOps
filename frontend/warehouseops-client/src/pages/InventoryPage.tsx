@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import { type SubmitHandler, useForm } from "react-hook-form";
 import { z } from "zod";
+import { useAuth } from "../auth/AuthContext";
 import {
   getInventoryItems,
   getLowStockInventoryItems,
@@ -40,6 +41,9 @@ const initialInventoryFormValues: InventoryFormValues = {
 
 export default function InventoryPage() {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
+
+  const canManageInventory = user?.role === "Admin" || user?.role === "WarehouseStaff";
 
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
   const [editingInventoryItem, setEditingInventoryItem] = useState<InventoryItem | null>(null);
@@ -73,6 +77,7 @@ export default function InventoryPage() {
       setEditingInventoryItem(null);
       reset(initialInventoryFormValues);
       queryClient.invalidateQueries({ queryKey: ["inventory"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
   });
 
@@ -90,6 +95,10 @@ export default function InventoryPage() {
   );
 
   function handleStartEdit(item: InventoryItem) {
+    if (!canManageInventory) {
+      return;
+    }
+
     setSuccessMessage("");
     updateInventoryMutation.reset();
 
@@ -112,7 +121,7 @@ export default function InventoryPage() {
   }
 
   const handleUpdateInventory: SubmitHandler<InventoryFormValues> = (values) => {
-    if (!editingInventoryItem) {
+    if (!canManageInventory || !editingInventoryItem) {
       return;
     }
 
@@ -150,7 +159,7 @@ export default function InventoryPage() {
           </div>
 
           <p className="mt-4 max-w-2xl text-sm leading-6 text-slate-500">
-            Monitor and update warehouse stock levels, minimum stock limits and low-stock items.
+            Monitor warehouse stock levels, minimum stock limits and low-stock items.
           </p>
         </div>
 
@@ -172,106 +181,115 @@ export default function InventoryPage() {
         </div>
       </section>
 
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-5 flex items-center justify-between gap-4">
-          <div className="flex items-center gap-3">
-            <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
-              <Save size={20} />
-            </div>
-
-            <div>
-              <h3 className="text-base font-semibold text-slate-950">Update inventory</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                {editingInventoryItem
-                  ? `Editing stock levels for ${editingInventoryItem.productName}.`
-                  : "Select an inventory item from the table to update stock levels."}
-              </p>
-            </div>
-          </div>
-
-          {editingInventoryItem && (
-            <button
-              type="button"
-              onClick={handleCancelEdit}
-              className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-            >
-              <X size={16} />
-              Cancel edit
-            </button>
-          )}
-        </div>
-
-        {editingInventoryItem ? (
-          <form onSubmit={handleSubmit(handleUpdateInventory)} className="grid gap-4 lg:grid-cols-2">
-            <div className="rounded-xl bg-slate-50 p-4 lg:col-span-2">
-              <p className="text-sm font-semibold text-slate-950">
-                {editingInventoryItem.productName}
-              </p>
-              <p className="mt-1 text-sm text-slate-500">
-                SKU: {editingInventoryItem.productSku}
-              </p>
-            </div>
-
-            <label className="block">
-              <span className="text-sm font-medium text-slate-700">Quantity in stock</span>
-              <input
-                {...register("quantityInStock", { valueAsNumber: true })}
-                type="number"
-                min="0"
-                step="1"
-                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              />
-              {errors.quantityInStock && (
-                <p className="mt-1 text-sm text-red-600">
-                  {errors.quantityInStock.message}
-                </p>
-              )}
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-medium text-slate-700">Minimum stock level</span>
-              <input
-                {...register("minimumStockLevel", { valueAsNumber: true })}
-                type="number"
-                min="0"
-                step="1"
-                className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
-              />
-              {errors.minimumStockLevel && (
-                <p className="mt-1 text-sm text-red-600">
-                  {errors.minimumStockLevel.message}
-                </p>
-              )}
-            </label>
-
-            {successMessage && (
-              <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 lg:col-span-2">
-                {successMessage}
+      {canManageInventory ? (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div className="flex items-center gap-3">
+              <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
+                <Save size={20} />
               </div>
-            )}
 
-            {updateInventoryMutation.isError && (
-              <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-2">
-                {updateErrorMessage}
+              <div>
+                <h3 className="text-base font-semibold text-slate-950">Update inventory</h3>
+                <p className="mt-1 text-sm text-slate-500">
+                  {editingInventoryItem
+                    ? `Editing stock levels for ${editingInventoryItem.productName}.`
+                    : "Select an inventory item from the table to update stock levels."}
+                </p>
               </div>
-            )}
+            </div>
 
-            <div className="flex justify-end lg:col-span-2">
+            {editingInventoryItem && (
               <button
-                type="submit"
-                disabled={updateInventoryMutation.isPending}
-                className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                type="button"
+                onClick={handleCancelEdit}
+                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
               >
-                {updateInventoryMutation.isPending ? "Updating..." : "Update inventory"}
+                <X size={16} />
+                Cancel edit
               </button>
-            </div>
-          </form>
-        ) : (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
-            No inventory item selected.
+            )}
           </div>
-        )}
-      </section>
+
+          {editingInventoryItem ? (
+            <form onSubmit={handleSubmit(handleUpdateInventory)} className="grid gap-4 lg:grid-cols-2">
+              <div className="rounded-xl bg-slate-50 p-4 lg:col-span-2">
+                <p className="text-sm font-semibold text-slate-950">
+                  {editingInventoryItem.productName}
+                </p>
+                <p className="mt-1 text-sm text-slate-500">
+                  SKU: {editingInventoryItem.productSku}
+                </p>
+              </div>
+
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Quantity in stock</span>
+                <input
+                  {...register("quantityInStock", { valueAsNumber: true })}
+                  type="number"
+                  min="0"
+                  step="1"
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+                {errors.quantityInStock && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.quantityInStock.message}
+                  </p>
+                )}
+              </label>
+
+              <label className="block">
+                <span className="text-sm font-medium text-slate-700">Minimum stock level</span>
+                <input
+                  {...register("minimumStockLevel", { valueAsNumber: true })}
+                  type="number"
+                  min="0"
+                  step="1"
+                  className="mt-2 w-full rounded-xl border border-slate-200 px-3 py-2 text-sm text-slate-950 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                />
+                {errors.minimumStockLevel && (
+                  <p className="mt-1 text-sm text-red-600">
+                    {errors.minimumStockLevel.message}
+                  </p>
+                )}
+              </label>
+
+              {successMessage && (
+                <div className="rounded-xl border border-green-200 bg-green-50 p-4 text-sm text-green-700 lg:col-span-2">
+                  {successMessage}
+                </div>
+              )}
+
+              {updateInventoryMutation.isError && (
+                <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 lg:col-span-2">
+                  {updateErrorMessage}
+                </div>
+              )}
+
+              <div className="flex justify-end lg:col-span-2">
+                <button
+                  type="submit"
+                  disabled={updateInventoryMutation.isPending}
+                  className="rounded-xl bg-blue-600 px-5 py-2.5 text-sm font-semibold text-white shadow-sm hover:bg-blue-700 disabled:cursor-not-allowed disabled:bg-blue-300"
+                >
+                  {updateInventoryMutation.isPending ? "Updating..." : "Update inventory"}
+                </button>
+              </div>
+            </form>
+          ) : (
+            <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-5 text-sm text-slate-500">
+              No inventory item selected.
+            </div>
+          )}
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
+          <h3 className="text-base font-semibold text-slate-950">Read only inventory access</h3>
+          <p className="mt-1 text-sm leading-6 text-slate-500">
+            Your role can view stock levels, but only Admin and WarehouseStaff users can update inventory.
+          </p>
+        </section>
+      )}
 
       <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
         <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
@@ -366,9 +384,11 @@ export default function InventoryPage() {
                   <th className="px-5 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
                     Updated
                   </th>
-                  <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Actions
-                  </th>
+                  {canManageInventory && (
+                    <th className="px-5 py-3 text-right text-xs font-semibold uppercase tracking-wide text-slate-500">
+                      Actions
+                    </th>
+                  )}
                 </tr>
               </thead>
 
@@ -412,16 +432,18 @@ export default function InventoryPage() {
                         : new Date(item.createdAt).toLocaleDateString("sv-SE")}
                     </td>
 
-                    <td className="whitespace-nowrap px-5 py-4 text-right">
-                      <button
-                        type="button"
-                        onClick={() => handleStartEdit(item)}
-                        className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-                      >
-                        <Pencil size={15} />
-                        Edit
-                      </button>
-                    </td>
+                    {canManageInventory && (
+                      <td className="whitespace-nowrap px-5 py-4 text-right">
+                        <button
+                          type="button"
+                          onClick={() => handleStartEdit(item)}
+                          className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
+                        >
+                          <Pencil size={15} />
+                          Edit
+                        </button>
+                      </td>
+                    )}
                   </tr>
                 ))}
               </tbody>
@@ -432,4 +454,3 @@ export default function InventoryPage() {
     </div>
   );
 }
-
