@@ -1,3 +1,4 @@
+using System.Net.Mail;
 using WarehouseOps.Application.Dtos;
 using WarehouseOps.Application.Interfaces;
 using WarehouseOps.Domain;
@@ -38,13 +39,15 @@ public class CustomerService : ICustomerService
 
     public async Task<CustomerDto> CreateAsync(CreateCustomerRequest request)
     {
-        ValidateRequest(request.Name, request.Email);
+        ArgumentNullException.ThrowIfNull(request);
+        ValidateRequest(request.Name, request.Email, request.PhoneNumber, request.Address);
 
-        var trimmedEmail = request.Email.Trim();
+        var name = request.Name.Trim();
+        var email = request.Email.Trim();
+        var phoneNumber = request.PhoneNumber?.Trim() ?? string.Empty;
+        var address = request.Address?.Trim() ?? string.Empty;
 
-        var emailExists = await _customerRepository.EmailExistsAsync(trimmedEmail);
-
-        if (emailExists)
+        if (await _customerRepository.EmailExistsAsync(email))
         {
             throw new InvalidOperationException("A customer with this email already exists.");
         }
@@ -52,29 +55,29 @@ public class CustomerService : ICustomerService
         var customer = new Customer
         {
             Id = Guid.NewGuid(),
-            Name = request.Name.Trim(),
-            Email = trimmedEmail,
-            PhoneNumber = request.PhoneNumber.Trim(),
-            Address = request.Address.Trim(),
+            Name = name,
+            Email = email,
+            PhoneNumber = phoneNumber,
+            Address = address,
             CreatedAt = DateTime.UtcNow
         };
 
         await _customerRepository.AddAsync(customer);
-
         await _customerRepository.SaveChangesAsync();
 
         await _auditLogService.LogAsync(
             "Customer",
             "Created",
             "System",
-            $"Created customer {customer.Name} with email {customer.Email}.");
+            $"Created customer {customer.Id}.");
 
         return MapToDto(customer);
     }
 
     public async Task<CustomerDto?> UpdateAsync(Guid id, UpdateCustomerRequest request)
     {
-        ValidateRequest(request.Name, request.Email);
+        ArgumentNullException.ThrowIfNull(request);
+        ValidateRequest(request.Name, request.Email, request.PhoneNumber, request.Address);
 
         var customer = await _customerRepository.GetByIdAsync(id);
 
@@ -83,42 +86,54 @@ public class CustomerService : ICustomerService
             return null;
         }
 
-        var trimmedEmail = request.Email.Trim();
+        var name = request.Name.Trim();
+        var email = request.Email.Trim();
+        var phoneNumber = request.PhoneNumber?.Trim() ?? string.Empty;
+        var address = request.Address?.Trim() ?? string.Empty;
 
-        var emailExists = await _customerRepository.EmailExistsAsync(trimmedEmail, id);
-
-        if (emailExists)
+        if (await _customerRepository.EmailExistsAsync(email, id))
         {
             throw new InvalidOperationException("A customer with this email already exists.");
         }
 
-        var oldName = customer.Name;
-        var oldEmail = customer.Email;
-        var oldPhoneNumber = customer.PhoneNumber;
-        var oldAddress = customer.Address;
+        var changedFields = new List<string>();
 
-        customer.Name = request.Name.Trim();
-        customer.Email = trimmedEmail;
-        customer.PhoneNumber = request.PhoneNumber.Trim();
-        customer.Address = request.Address.Trim();
+        if (customer.Name != name) changedFields.Add("Name");
+        if (customer.Email != email) changedFields.Add("Email");
+        if (customer.PhoneNumber != phoneNumber) changedFields.Add("PhoneNumber");
+        if (customer.Address != address) changedFields.Add("Address");
+
+        customer.Name = name;
+        customer.Email = email;
+        customer.PhoneNumber = phoneNumber;
+        customer.Address = address;
         customer.UpdatedAt = DateTime.UtcNow;
 
         await _customerRepository.SaveChangesAsync();
+
+        var changedFieldsDescription = changedFields.Count == 0
+            ? "None"
+            : string.Join(", ", changedFields);
 
         await _auditLogService.LogAsync(
             "Customer",
             "Updated",
             "System",
-            $"Updated customer {customer.Id}. Old values: Name={oldName}, Email={oldEmail}, PhoneNumber={oldPhoneNumber}, Address={oldAddress}. New values: Name={customer.Name}, Email={customer.Email}, PhoneNumber={customer.PhoneNumber}, Address={customer.Address}.");
+            $"Updated customer {customer.Id}. Changed fields: {changedFieldsDescription}.");
 
         return MapToDto(customer);
     }
 
-    private static void ValidateRequest(string name, string email)
+    private static void ValidateRequest(string? name, string? email, string? phoneNumber, string? address)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
             throw new ArgumentException("Customer name is required.");
+        }
+
+        if (name.Trim().Length > 200)
+        {
+            throw new ArgumentException("Customer name cannot be longer than 200 characters.");
         }
 
         if (string.IsNullOrWhiteSpace(email))
@@ -126,9 +141,27 @@ public class CustomerService : ICustomerService
             throw new ArgumentException("Customer email is required.");
         }
 
-        if (!email.Contains('@'))
+        var trimmedEmail = email.Trim();
+
+        if (trimmedEmail.Length > 254)
+        {
+            throw new ArgumentException("Customer email cannot be longer than 254 characters.");
+        }
+
+        if (!MailAddress.TryCreate(trimmedEmail, out var parsedEmail) ||
+            !string.Equals(parsedEmail.Address, trimmedEmail, StringComparison.OrdinalIgnoreCase))
         {
             throw new ArgumentException("Customer email must be valid.");
+        }
+
+        if ((phoneNumber?.Trim().Length ?? 0) > 50)
+        {
+            throw new ArgumentException("Customer phone number cannot be longer than 50 characters.");
+        }
+
+        if ((address?.Trim().Length ?? 0) > 500)
+        {
+            throw new ArgumentException("Customer address cannot be longer than 500 characters.");
         }
     }
 

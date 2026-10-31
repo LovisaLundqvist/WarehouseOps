@@ -1,5 +1,6 @@
 using WarehouseOps.Application.Dtos;
 using WarehouseOps.Application.Interfaces;
+using WarehouseOps.Application.Validation;
 using WarehouseOps.Domain;
 
 namespace WarehouseOps.Application.Services;
@@ -150,9 +151,7 @@ public class ShipmentService : IShipmentService
             throw new ArgumentException("Shipment status is required.");
         }
 
-        var parsed = Enum.TryParse<ShipmentStatus>(status.Trim(), true, out var shipmentStatus);
-
-        if (!parsed)
+        if (!EnumNameParser.TryParse(status, out ShipmentStatus shipmentStatus))
         {
             throw new ArgumentException("Shipment status is invalid. Valid statuses are Pending, Packed, Shipped, Delivered, Delayed and Cancelled.");
         }

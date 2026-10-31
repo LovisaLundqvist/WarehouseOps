@@ -1,5 +1,6 @@
 using WarehouseOps.Application.Dtos;
 using WarehouseOps.Application.Interfaces;
+using WarehouseOps.Application.Validation;
 using WarehouseOps.Domain;
 
 namespace WarehouseOps.Application.Services;
@@ -178,9 +179,7 @@ public class IncidentService : IIncidentService
             throw new ArgumentException("Incident status is required.");
         }
 
-        var parsed = Enum.TryParse<IncidentStatus>(status.Trim(), true, out var incidentStatus);
-
-        if (!parsed)
+        if (!EnumNameParser.TryParse(status, out IncidentStatus incidentStatus))
         {
             throw new ArgumentException("Incident status is invalid. Valid statuses are Open, InProgress, Resolved and Closed.");
         }
@@ -195,9 +194,7 @@ public class IncidentService : IIncidentService
             return IncidentSeverity.Medium;
         }
 
-        var parsed = Enum.TryParse<IncidentSeverity>(severity.Trim(), true, out var incidentSeverity);
-
-        if (!parsed)
+        if (!EnumNameParser.TryParse(severity, out IncidentSeverity incidentSeverity))
         {
             throw new ArgumentException("Incident severity is invalid. Valid severities are Low, Medium, High and Critical.");
         }
@@ -212,12 +209,7 @@ public class IncidentService : IIncidentService
             return IncidentRelatedEntityType.General;
         }
 
-        var parsed = Enum.TryParse<IncidentRelatedEntityType>(
-            relatedEntityType.Trim(),
-            true,
-            out var parsedRelatedEntityType);
-
-        if (!parsed)
+        if (!EnumNameParser.TryParse(relatedEntityType, out IncidentRelatedEntityType parsedRelatedEntityType))
         {
             throw new ArgumentException("Related entity type is invalid. Valid types are General, Product, Inventory, Customer, Order and Shipment.");
         }
