@@ -34,6 +34,30 @@ public class ApplicationDbContext : DbContext
             .Property(product => product.Price)
             .HasPrecision(18, 2);
 
+        modelBuilder.Entity<Product>()
+            .Property(product => product.Sku)
+            .HasMaxLength(100);
+
+        modelBuilder.Entity<Product>()
+            .HasIndex(product => product.Sku)
+            .IsUnique();
+
+        modelBuilder.Entity<Customer>()
+            .Property(customer => customer.Email)
+            .HasMaxLength(254);
+
+        modelBuilder.Entity<Customer>()
+            .HasIndex(customer => customer.Email)
+            .IsUnique();
+
+        modelBuilder.Entity<InventoryItem>()
+            .HasIndex(inventoryItem => inventoryItem.ProductId)
+            .IsUnique();
+
+        modelBuilder.Entity<Shipment>()
+            .HasIndex(shipment => shipment.OrderId)
+            .IsUnique();
+
         modelBuilder.Entity<Order>()
             .Property(order => order.TotalAmount)
             .HasPrecision(18, 2);
