@@ -101,7 +101,12 @@ builder.Services.AddScoped<IPasswordHashingService, PasswordHashingService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 
-builder.Services.AddScoped<IInventoryService, InventoryService>();
+// Inventory business rules remain in InventoryService; the decorator supplies transactions.
+builder.Services.AddScoped<InventoryService>();
+builder.Services.AddScoped<IInventoryService>(provider =>
+    new TransactionalInventoryService(
+        provider.GetRequiredService<InventoryService>(),
+        provider.GetRequiredService<ITransactionExecutor>()));
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 
 builder.Services.AddScoped<ICustomerService, CustomerService>();
