@@ -1,43 +1,90 @@
-import { LogOut } from "lucide-react";
-import { Outlet } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../auth/AuthContext";
 import Sidebar from "../components/Sidebar";
 
+const pageNames: Record<string, string> = {
+  "/": "Overview",
+  "/products": "Products",
+  "/inventory": "Inventory",
+  "/customers": "Customers",
+  "/orders": "Orders",
+  "/shipments": "Shipments",
+  "/incidents": "Incidents",
+  "/audit-logs": "Change history",
+};
+
 export default function AppLayout() {
   const { user, logout } = useAuth();
+  const { pathname } = useLocation();
+  const [isNavigationOpen, setIsNavigationOpen] = useState(false);
+
+  useEffect(() => {
+    if (!isNavigationOpen) return;
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setIsNavigationOpen(false);
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [isNavigationOpen]);
 
   return (
-    <div className="min-h-screen bg-slate-100">
-      <Sidebar />
+    <div className="ops-app">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:fixed focus:left-3 focus:top-3 focus:z-50 focus:bg-[#F8F6F0] focus:p-3"
+      >
+        Skip to content
+      </a>
 
-      <div className="lg:pl-72">
-        <header className="sticky top-0 z-10 border-b border-slate-200 bg-white/90 backdrop-blur">
-          <div className="flex h-16 items-center justify-between px-6">
+      {isNavigationOpen && (
+        <button
+          type="button"
+          className="ops-overlay"
+          aria-label="Close navigation overlay"
+          onClick={() => setIsNavigationOpen(false)}
+        />
+      )}
+
+      <Sidebar
+        isOpen={isNavigationOpen}
+        onClose={() => setIsNavigationOpen(false)}
+      />
+
+      <div className="ops-main-column">
+        <header className="ops-header">
+          <div className="ops-header__start">
+            <button
+              type="button"
+              className="ops-button-quiet ops-menu-button"
+              aria-expanded={isNavigationOpen}
+              aria-controls="primary-navigation"
+              onClick={() => setIsNavigationOpen(true)}
+            >
+              Menu
+            </button>
             <div>
-              <p className="text-sm font-medium text-slate-500">WarehouseOps</p>
-              <h1 className="text-lg font-semibold text-slate-950">Operations dashboard</h1>
+              <p className="ops-eyebrow ops-header__eyebrow">WarehouseOps / Workspace</p>
+              <p className="ops-header__label">{pageNames[pathname] ?? "Operations"}</p>
             </div>
+          </div>
 
-            <div className="flex items-center gap-3">
-              {user && (
-                <div className="hidden rounded-full border border-slate-200 bg-slate-50 px-4 py-2 text-sm font-medium text-slate-600 md:block">
-                  {user.displayName} | {user.role}
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={logout}
-                className="inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2 text-sm font-semibold text-slate-700 shadow-sm hover:bg-slate-50"
-              >
-                <LogOut size={16} />
-                Logout
-              </button>
-            </div>
+          <div className="ops-header__end">
+            {user && (
+              <div className="ops-header__user">
+                <p className="ops-header__user-name">{user.displayName}</p>
+                <p className="ops-header__role">{user.role}</p>
+              </div>
+            )}
+            <button type="button" className="ops-button-quiet" onClick={logout}>
+              Sign out
+            </button>
           </div>
         </header>
 
-        <main className="px-6 py-6">
+        <main className="ops-content" id="main-content">
           <Outlet />
         </main>
       </div>

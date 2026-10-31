@@ -1,91 +1,82 @@
 import { NavLink } from "react-router-dom";
-import {
-  AlertTriangle,
-  BarChart3,
-  Boxes,
-  ClipboardList,
-  History,
-  LayoutDashboard,
-  Package,
-  Truck,
-  Users,
-  type LucideIcon,
-} from "lucide-react";
 import { useAuth } from "../auth/AuthContext";
 import type { UserRole } from "../types/auth";
 
 type NavigationItem = {
-  name: string;
+  label: string;
   path: string;
-  icon: LucideIcon;
   roles?: UserRole[];
 };
 
+type SidebarProps = {
+  isOpen: boolean;
+  onClose: () => void;
+};
+
 const navigationItems: NavigationItem[] = [
-  { name: "Dashboard", path: "/", icon: LayoutDashboard },
-  { name: "Products", path: "/products", icon: Package },
-  { name: "Inventory", path: "/inventory", icon: Boxes },
-  { name: "Customers", path: "/customers", icon: Users },
-  { name: "Orders", path: "/orders", icon: ClipboardList },
-  { name: "Shipments", path: "/shipments", icon: Truck },
-  { name: "Incidents", path: "/incidents", icon: AlertTriangle },
-  { name: "Change History", path: "/audit-logs", icon: History, roles: ["Admin", "Manager"] },
+  { label: "Overview", path: "/" },
+  { label: "Products", path: "/products" },
+  { label: "Inventory", path: "/inventory" },
+  { label: "Customers", path: "/customers" },
+  { label: "Orders", path: "/orders" },
+  { label: "Shipments", path: "/shipments" },
+  { label: "Incidents", path: "/incidents" },
+  { label: "Change history", path: "/audit-logs", roles: ["Admin", "Manager"] },
 ];
 
-export default function Sidebar() {
+export default function Sidebar({ isOpen, onClose }: SidebarProps) {
   const { user } = useAuth();
 
-  const allowedNavigationItems = navigationItems.filter((item) => {
-    if (!item.roles) {
-      return true;
-    }
-
-    return user ? item.roles.includes(user.role) : false;
-  });
+  const visibleItems = navigationItems.filter(
+    (item) => !item.roles || (user && item.roles.includes(user.role)),
+  );
 
   return (
-    <aside className="fixed inset-y-0 left-0 z-20 hidden w-72 border-r border-slate-800 bg-slate-950 px-4 py-5 text-white lg:block">
-      <div className="mb-8 flex items-center gap-3 px-2">
-        <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-blue-500">
-          <BarChart3 size={24} />
-        </div>
-
-        <div>
-          <p className="text-lg font-bold tracking-tight">WarehouseOps</p>
-          <p className="text-xs text-slate-400">Logistics management</p>
-        </div>
+    <aside
+      className={`ops-sidebar${isOpen ? " ops-sidebar--open" : ""}`}
+      id="primary-navigation"
+      aria-label="Main navigation"
+    >
+      <div className="ops-sidebar__brand">
+        <button
+          type="button"
+          className="ops-sidebar__close"
+          onClick={onClose}
+          aria-label="Close navigation"
+        >
+          Close
+        </button>
+        <span className="ops-eyebrow ops-sidebar__brand-label">
+          Internal / Logistics
+        </span>
+        <span className="ops-display ops-sidebar__brand-name">WarehouseOps</span>
+        <span className="ops-sidebar__brand-meta">Operations management</span>
       </div>
 
-      <nav className="space-y-1">
-        {allowedNavigationItems.map((item) => {
-          const Icon = item.icon;
-
-          return (
-            <NavLink
-              key={item.name}
-              to={item.path}
-              end={item.path === "/"}
-              className={({ isActive }) =>
-                [
-                  "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition",
-                  isActive
-                    ? "bg-blue-500 text-white shadow-sm"
-                    : "text-slate-300 hover:bg-slate-900 hover:text-white",
-                ].join(" ")
-              }
-            >
-              <Icon size={18} />
-              <span>{item.name}</span>
-            </NavLink>
-          );
-        })}
+      <nav className="ops-sidebar__nav" aria-label="Workspace sections">
+        <p className="ops-eyebrow ops-sidebar__heading">Workspace</p>
+        {visibleItems.map((item, index) => (
+          <NavLink
+            key={item.path}
+            to={item.path}
+            end={item.path === "/"}
+            onClick={onClose}
+            className={({ isActive }) =>
+              `ops-navlink${isActive ? " ops-navlink--active" : ""}`
+            }
+          >
+            <span className="ops-navlink__index" aria-hidden="true">
+              {String(index + 1).padStart(2, "0")}
+            </span>
+            <span>{item.label}</span>
+          </NavLink>
+        ))}
       </nav>
 
-      <div className="absolute bottom-5 left-4 right-4 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-        <p className="text-sm font-semibold text-white">Signed in as</p>
-        <p className="mt-1 text-xs leading-5 text-slate-400">
-          {user ? `${user.displayName} | ${user.role}` : "No user"}
-        </p>
+      <div className="ops-sidebar__account">
+        <p className="ops-eyebrow ops-sidebar__account-label">Current session</p>
+        <p className="ops-sidebar__account-name">{user?.displayName ?? "Unknown user"}</p>
+        <p className="ops-sidebar__account-role">{user?.role ?? "No assigned role"}</p>
       </div>
     </aside>
   );

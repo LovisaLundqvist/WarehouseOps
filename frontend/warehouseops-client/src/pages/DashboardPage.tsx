@@ -1,37 +1,12 @@
 import { useQuery } from "@tanstack/react-query";
-import {
-  AlertTriangle,
-  ArrowUpRight,
-  Boxes,
-  ClipboardList,
-  PackageCheck,
-  Truck,
-} from "lucide-react";
-import {
-  Bar,
-  BarChart,
-  CartesianGrid,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
+import { Link } from "react-router-dom";
 import { getDashboardSummary } from "../api/dashboardApi";
-import type { DashboardSummary } from "../types/dashboard";
 import { getApiErrorMessage } from "../utils/getApiErrorMessage";
 
-const emptyDashboardSummary: DashboardSummary = {
-  activeOrdersCount: 0,
-  lowStockItemsCount: 0,
-  openIncidentsCount: 0,
-  activeShipmentsCount: 0,
-  orderStatusCounts: [],
-  recentActivities: [],
-  recentShipments: [],
-};
-
 function formatDateTime(value: string) {
-  return new Date(value).toLocaleString("sv-SE", {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date unavailable";
+  return date.toLocaleString("sv-SE", {
     dateStyle: "short",
     timeStyle: "short",
   });
@@ -41,227 +16,235 @@ function formatShortId(id: string) {
   return `#${id.slice(0, 8).toUpperCase()}`;
 }
 
+function isAttentionStatus(status: string) {
+  return ["delayed", "cancelled"].includes(status.toLowerCase());
+}
+
 export default function DashboardPage() {
-  const {
-    data: dashboardSummary = emptyDashboardSummary,
-    isLoading,
-    isError,
-    error,
-  } = useQuery({
+  const { data, isLoading, isError, error } = useQuery({
     queryKey: ["dashboard-summary"],
     queryFn: getDashboardSummary,
   });
 
-  const summaryCards = [
+  const metrics = [
     {
-      title: "Active orders",
-      value: dashboardSummary.activeOrdersCount,
-      description: "Orders currently being handled",
-      icon: ClipboardList,
+      label: "Active orders",
+      value: data?.activeOrdersCount,
+      detail: "Orders currently in process",
+      attention: false,
     },
     {
-      title: "Low stock items",
-      value: dashboardSummary.lowStockItemsCount,
-      description: "Products at or below minimum stock level",
-      icon: Boxes,
+      label: "Low stock",
+      value: data?.lowStockItemsCount,
+      detail: "Items requiring attention",
+      attention: true,
     },
     {
-      title: "Open incidents",
-      value: dashboardSummary.openIncidentsCount,
-      description: "Reported issues that are not closed",
-      icon: AlertTriangle,
+      label: "Open incidents",
+      value: data?.openIncidentsCount,
+      detail: "Unresolved operational issues",
+      attention: true,
     },
     {
-      title: "Active shipments",
-      value: dashboardSummary.activeShipmentsCount,
-      description: "Shipments not yet delivered",
-      icon: Truck,
+      label: "Active shipments",
+      value: data?.activeShipmentsCount,
+      detail: "Deliveries currently in progress",
+      attention: false,
     },
   ];
 
-  const errorMessage = getApiErrorMessage(error, "Could not load dashboard data.");
+  const statusCounts = data?.orderStatusCounts ?? [];
+  const statusTotal = statusCounts.reduce((total, item) => total + item.count, 0);
+  const activities = data?.recentActivities ?? [];
+  const shipments = data?.recentShipments ?? [];
 
   return (
-    <div className="space-y-6">
-      <section className="rounded-3xl bg-slate-950 p-6 text-white shadow-sm">
-        <div className="flex flex-col justify-between gap-6 lg:flex-row lg:items-center">
-          <div>
-            <p className="text-sm font-medium text-blue-300">Warehouse overview</p>
-            <h2 className="mt-2 text-3xl font-bold tracking-tight">Operational control center</h2>
-            <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-300">
-              Monitor orders, stock, shipments and incidents from one business-focused dashboard.
-            </p>
-          </div>
-
-          <div className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-            <div className="flex items-center gap-3">
-              <PackageCheck className="text-blue-300" size={28} />
-              <div>
-                <p className="text-sm text-slate-400">Dashboard status</p>
-                <p className="text-base font-semibold text-white">
-                  {isLoading ? "Loading current data" : "Showing current data"}
-                </p>
-              </div>
-            </div>
-          </div>
+    <div className="ops-page">
+      <section className="ops-page__masthead">
+        <div>
+          <p className="ops-eyebrow ops-page__kicker">01 / Operations overview</p>
+          <h1 className="ops-display ops-page__title">Warehouse operations.</h1>
+          <p className="ops-page__description">
+            An overview of order flow, stock levels, shipments and recorded incidents.
+            Figures are retrieved from the WarehouseOps API.
+          </p>
+        </div>
+        <div className="ops-page__aside">
+          <p className="ops-page__aside-title">Data source</p>
+          <span className="ops-page__aside-text">
+            {isLoading
+              ? "Retrieving information"
+              : isError
+                ? "Connection unavailable"
+                : "WarehouseOps database"}
+          </span>
         </div>
       </section>
 
       {isError && (
-        <section className="rounded-2xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-          {errorMessage}
-        </section>
+        <div className="ops-notice" role="alert">
+          {getApiErrorMessage(error, "Could not load dashboard data. Check the API connection.")}
+        </div>
       )}
 
-      <section className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
-        {summaryCards.map((card) => {
-          const Icon = card.icon;
-
-          return (
-            <article key={card.title} className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-              <div className="flex items-start justify-between gap-4">
-                <div>
-                  <p className="text-sm font-medium text-slate-500">{card.title}</p>
-                  <p className="mt-3 text-3xl font-bold text-slate-950">
-                    {isLoading ? "..." : card.value}
-                  </p>
-                </div>
-
-                <div className="rounded-xl bg-blue-50 p-3 text-blue-600">
-                  <Icon size={22} />
-                </div>
-              </div>
-
-              <p className="mt-4 text-sm leading-5 text-slate-500">{card.description}</p>
-            </article>
-          );
-        })}
-      </section>
-
-      <section className="grid gap-6 xl:grid-cols-3">
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm xl:col-span-2">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-semibold text-slate-950">Orders by status</h3>
-              <p className="mt-1 text-sm text-slate-500">
-                Shows how current orders are distributed by status.
-              </p>
-            </div>
-
-            <span className="rounded-full bg-slate-100 px-3 py-1 text-xs font-medium text-slate-600">
-              Live data
-            </span>
-          </div>
-
-          <div className="h-80">
-            {dashboardSummary.orderStatusCounts.length === 0 && !isLoading ? (
-              <div className="flex h-full items-center justify-center rounded-2xl bg-slate-50 text-sm text-slate-500">
-                No order data available.
-              </div>
-            ) : (
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={dashboardSummary.orderStatusCounts}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} />
-                  <XAxis dataKey="status" />
-                  <YAxis allowDecimals={false} />
-                  <Tooltip />
-                  <Bar dataKey="count" fill="#2563eb" radius={[8, 8, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            )}
-          </div>
-        </article>
-
-        <article className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
-            <div>
-              <h3 className="text-base font-semibold text-slate-950">Recent activity</h3>
-              <p className="mt-1 text-sm text-slate-500">Latest important changes</p>
-            </div>
-
-            <ArrowUpRight size={18} className="text-slate-400" />
-          </div>
-
-          <div className="space-y-4">
-            {isLoading && <p className="text-sm text-slate-500">Loading recent activity...</p>}
-
-            {!isLoading && dashboardSummary.recentActivities.length === 0 && (
-              <p className="text-sm text-slate-500">No recent activity yet.</p>
-            )}
-
-            {dashboardSummary.recentActivities.map((activity) => (
-              <div key={`${activity.title}-${activity.performedAt}`} className="rounded-xl border border-slate-100 bg-slate-50 p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <p className="text-sm font-semibold text-slate-950">{activity.title}</p>
-                  <span className="text-xs text-slate-400">{formatDateTime(activity.performedAt)}</span>
-                </div>
-                <p className="mt-2 text-sm leading-5 text-slate-500">{activity.description}</p>
-                <p className="mt-2 text-xs text-slate-400">Changed by {activity.performedBy}</p>
-              </div>
-            ))}
-          </div>
-        </article>
-      </section>
-
-      <section className="rounded-2xl border border-slate-200 bg-white p-5 shadow-sm">
-        <div className="mb-5 flex items-center justify-between">
-          <div>
-            <h3 className="text-base font-semibold text-slate-950">Recent shipments</h3>
-            <p className="mt-1 text-sm text-slate-500">
-              Latest shipments created in the warehouse flow.
-            </p>
-          </div>
-
-          <Truck size={18} className="text-slate-400" />
+      <section className="ops-overview" aria-labelledby="operations-today">
+        <div className="ops-section-head">
+          <h2 className="ops-section-head__title" id="operations-today">
+            Current position
+          </h2>
+          <span className="ops-section-head__aux">Operational indicators / 04</span>
         </div>
 
-        {isLoading && <p className="text-sm text-slate-500">Loading recent shipments...</p>}
+        <div className="ops-metrics">
+          {metrics.map((metric) => (
+            <article className="ops-metric" key={metric.label}>
+              <h3 className="ops-metric__label">{metric.label}</h3>
+              {isLoading ? (
+                <div className="ops-skeleton ops-skeleton--number" aria-label="Loading" />
+              ) : (
+                <p
+                  className={`ops-metric__value${
+                    metric.attention && (metric.value ?? 0) > 0
+                      ? " ops-metric__value--attention"
+                      : ""
+                  }`}
+                >
+                  {isError || metric.value === undefined ? "—" : metric.value}
+                </p>
+              )}
+              <p className="ops-metric__foot">{metric.detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
 
-        {!isLoading && dashboardSummary.recentShipments.length === 0 && (
-          <p className="text-sm text-slate-500">No shipments found.</p>
-        )}
+      <div className="ops-dataviews">
+        <section className="ops-panel" aria-labelledby="order-distribution">
+          <div className="ops-panel__header">
+            <h2 className="ops-panel__title" id="order-distribution">
+              Order distribution
+            </h2>
+            <span className="ops-panel__number">02 / Orders</span>
+          </div>
 
-        {!isLoading && dashboardSummary.recentShipments.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="min-w-full divide-y divide-slate-200">
-              <thead className="bg-slate-50">
+          {isLoading ? (
+            <div aria-label="Loading order distribution">
+              {[0, 1, 2].map((index) => (
+                <div key={index} className="ops-skeleton ops-skeleton--wide" />
+              ))}
+            </div>
+          ) : statusCounts.length === 0 || statusTotal === 0 ? (
+            <p className="ops-empty">
+              {isError ? "Order distribution unavailable." : "No order records available."}
+            </p>
+          ) : (
+            <div className="ops-status-list">
+              {statusCounts.map(({ status, count }) => {
+                const percent = Math.max(0, Math.min(100, (count / statusTotal) * 100));
+                return (
+                  <div className="ops-status" key={status}>
+                    <div className="ops-status__labelrow">
+                      <span className="ops-status__name">{status}</span>
+                      <span className="ops-status__number">
+                        {count} <span className="ops-section-head__aux">/ {statusTotal}</span>
+                      </span>
+                    </div>
+                    <div
+                      className="ops-status__track"
+                      role="meter"
+                      aria-label={`${status} share of orders`}
+                      aria-valuemin={0}
+                      aria-valuemax={100}
+                      aria-valuenow={Math.round(percent)}
+                    >
+                      <div className="ops-status__fill" style={{ width: `${percent}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </section>
+
+        <section className="ops-panel" aria-labelledby="recent-activity">
+          <div className="ops-panel__header">
+            <h2 className="ops-panel__title" id="recent-activity">
+              Recent activity
+            </h2>
+            <span className="ops-panel__number">03 / History</span>
+          </div>
+
+          {isLoading ? (
+            <div aria-label="Loading recent activity">
+              {[0, 1, 2].map((index) => (
+                <div key={index} className="ops-skeleton ops-skeleton--wide" />
+              ))}
+            </div>
+          ) : activities.length === 0 ? (
+            <p className="ops-empty">
+              {isError ? "Activity records unavailable." : "No changes recorded yet."}
+            </p>
+          ) : (
+            <ol className="ops-activity">
+              {activities.map((activity, index) => (
+                <li className="ops-activity__item" key={`${activity.title}-${activity.performedAt}-${index}`}>
+                  <p className="ops-activity__title">{activity.title}</p>
+                  <p className="ops-activity__description">{activity.description}</p>
+                  <div className="ops-activity__meta">
+                    <span>{formatDateTime(activity.performedAt)}</span>
+                    <span>{activity.performedBy || "User unavailable"}</span>
+                  </div>
+                </li>
+              ))}
+            </ol>
+          )}
+        </section>
+      </div>
+
+      <section className="ops-table-section" aria-labelledby="recent-shipments">
+        <div className="ops-table-section__head">
+          <h2 className="ops-panel__title" id="recent-shipments">
+            Recent shipments
+          </h2>
+          <Link className="ops-section-head__aux" to="/shipments">
+            View all shipments
+          </Link>
+        </div>
+
+        {isLoading ? (
+          <div className="ops-panel" aria-label="Loading recent shipments">
+            {[0, 1, 2].map((index) => (
+              <div key={index} className="ops-skeleton ops-skeleton--wide" />
+            ))}
+          </div>
+        ) : shipments.length === 0 ? (
+          <p className="ops-empty" style={{ padding: "22px 28px" }}>
+            {isError ? "Shipments unavailable." : "No shipments have been recorded."}
+          </p>
+        ) : (
+          <div className="ops-data-scroll">
+            <table className="ops-table">
+              <thead>
                 <tr>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Shipment
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Customer
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Status
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Tracking
-                  </th>
-                  <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-wide text-slate-500">
-                    Created
-                  </th>
+                  <th scope="col">Shipment ID</th>
+                  <th scope="col">Customer</th>
+                  <th scope="col">Status</th>
+                  <th scope="col">Tracking</th>
+                  <th scope="col">Created</th>
                 </tr>
               </thead>
-
-              <tbody className="divide-y divide-slate-100 bg-white">
-                {dashboardSummary.recentShipments.map((shipment) => (
+              <tbody>
+                {shipments.map((shipment) => (
                   <tr key={shipment.id}>
-                    <td className="px-4 py-3 text-sm font-semibold text-slate-950">
-                      {formatShortId(shipment.id)}
+                    <td className="ops-table__strong ops-table__id">{formatShortId(shipment.id)}</td>
+                    <td>{shipment.customerName || "Not specified"}</td>
+                    <td>
+                      <span className={`ops-status-tag${isAttentionStatus(shipment.status) ? " ops-status-tag--warning" : ""}`}>
+                        {shipment.status}
+                      </span>
                     </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {shipment.customerName || "Customer not shown"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {shipment.status}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {shipment.trackingNumber || "Not assigned"}
-                    </td>
-                    <td className="px-4 py-3 text-sm text-slate-600">
-                      {formatDateTime(shipment.createdAt)}
-                    </td>
+                    <td className="ops-table__id">{shipment.trackingNumber || "Not assigned"}</td>
+                    <td>{formatDateTime(shipment.createdAt)}</td>
                   </tr>
                 ))}
               </tbody>
