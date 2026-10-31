@@ -1,5 +1,7 @@
 using System.Text;
+using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi;
@@ -51,6 +53,32 @@ builder.Services.AddCors(options =>
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
+});
+
+// Five login attempts per minute and client IP. No waiting queue is permitted.
+builder.Services.AddRateLimiter(options =>
+{
+    options.AddPolicy("login", context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            partitionKey: context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            factory: _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = 5,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+                AutoReplenishment = true
+            }));
+
+    options.OnRejected = async (context, _) =>
+    {
+        var response = context.HttpContext.Response;
+        response.StatusCode = StatusCodes.Status429TooManyRequests;
+        response.Headers["Retry-After"] = "60";
+        await response.WriteAsJsonAsync(new
+        {
+            message = "Too many login attempts. Please try again later."
+        });
+    };
 });
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
@@ -170,7 +198,12 @@ if (app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 
+app.UseRouting();
+
 app.UseCors(frontendCorsPolicy);
+
+// Endpoint-specific rate limiting must run after routing.
+app.UseRateLimiter();
 
 app.UseAuthentication();
 
@@ -225,3 +258,6 @@ static async Task SeedDemoDataAsync(WebApplication app)
 
     logger.LogInformation("Demo seed data was checked successfully.");
 }
+
+// Expose the web entry point to WebApplicationFactory integration tests.
+public partial class Program { }
