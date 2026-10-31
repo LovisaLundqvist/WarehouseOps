@@ -98,10 +98,14 @@ builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
 builder.Services.AddScoped<IPasswordHashingService, PasswordHashingService>();
 
-builder.Services.AddScoped<IProductService, ProductService>();
+// Business rules stay in the inner services. Decorators handle transactions.
+builder.Services.AddScoped<ProductService>();
+builder.Services.AddScoped<IProductService>(provider =>
+    new TransactionalProductService(
+        provider.GetRequiredService<ProductService>(),
+        provider.GetRequiredService<ITransactionExecutor>()));
 builder.Services.AddScoped<IProductRepository, ProductRepository>();
 
-// Inventory business rules remain in InventoryService; the decorator supplies transactions.
 builder.Services.AddScoped<InventoryService>();
 builder.Services.AddScoped<IInventoryService>(provider =>
     new TransactionalInventoryService(
@@ -109,10 +113,13 @@ builder.Services.AddScoped<IInventoryService>(provider =>
         provider.GetRequiredService<ITransactionExecutor>()));
 builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 
-builder.Services.AddScoped<ICustomerService, CustomerService>();
+builder.Services.AddScoped<CustomerService>();
+builder.Services.AddScoped<ICustomerService>(provider =>
+    new TransactionalCustomerService(
+        provider.GetRequiredService<CustomerService>(),
+        provider.GetRequiredService<ITransactionExecutor>()));
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 
-// Business rules remain in OrderService. The outer service supplies transactions.
 builder.Services.AddScoped<OrderService>();
 builder.Services.AddScoped<IOrderService>(provider =>
     new TransactionalOrderService(
@@ -120,10 +127,18 @@ builder.Services.AddScoped<IOrderService>(provider =>
         provider.GetRequiredService<ITransactionExecutor>()));
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 
-builder.Services.AddScoped<IShipmentService, ShipmentService>();
+builder.Services.AddScoped<ShipmentService>();
+builder.Services.AddScoped<IShipmentService>(provider =>
+    new TransactionalShipmentService(
+        provider.GetRequiredService<ShipmentService>(),
+        provider.GetRequiredService<ITransactionExecutor>()));
 builder.Services.AddScoped<IShipmentRepository, ShipmentRepository>();
 
-builder.Services.AddScoped<IIncidentService, IncidentService>();
+builder.Services.AddScoped<IncidentService>();
+builder.Services.AddScoped<IIncidentService>(provider =>
+    new TransactionalIncidentService(
+        provider.GetRequiredService<IncidentService>(),
+        provider.GetRequiredService<ITransactionExecutor>()));
 builder.Services.AddScoped<IIncidentRepository, IncidentRepository>();
 
 builder.Services.AddScoped<IAuditLogService, AuditLogService>();
