@@ -54,6 +54,10 @@ public class ApplicationDbContext : DbContext
             .HasIndex(inventoryItem => inventoryItem.ProductId)
             .IsUnique();
 
+        modelBuilder.Entity<InventoryItem>()
+            .Property(inventoryItem => inventoryItem.RowVersion)
+            .IsRowVersion();
+
         modelBuilder.Entity<Shipment>()
             .HasIndex(shipment => shipment.OrderId)
             .IsUnique();

@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using WarehouseOps.Application.Exceptions;
 using WarehouseOps.Application.Interfaces;
 using WarehouseOps.Domain;
 
@@ -57,6 +58,13 @@ public class OrderRepository : IOrderRepository
 
     public async Task SaveChangesAsync()
     {
-        await _context.SaveChangesAsync();
+        try
+        {
+            await _context.SaveChangesAsync();
+        }
+        catch (DbUpdateConcurrencyException exception)
+        {
+            throw new InventoryConcurrencyException(exception);
+        }
     }
 }

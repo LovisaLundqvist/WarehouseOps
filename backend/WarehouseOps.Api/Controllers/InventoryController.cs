@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WarehouseOps.Api.Security;
 using WarehouseOps.Application.Dtos;
+using WarehouseOps.Application.Exceptions;
 using WarehouseOps.Application.Interfaces;
 
 namespace WarehouseOps.Api.Controllers;
@@ -81,6 +82,10 @@ public class InventoryController : ControllerBase
             }
 
             return Ok(inventoryItem);
+        }
+        catch (InventoryConcurrencyException exception)
+        {
+            return Conflict(exception.Message);
         }
         catch (ArgumentException exception)
         {

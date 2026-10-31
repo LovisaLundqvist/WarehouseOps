@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using WarehouseOps.Api.Security;
 using WarehouseOps.Application.Dtos;
+using WarehouseOps.Application.Exceptions;
 using WarehouseOps.Application.Interfaces;
 
 namespace WarehouseOps.Api.Controllers;
@@ -48,6 +49,10 @@ public class OrdersController : ControllerBase
             var order = await _orderService.CreateAsync(request);
 
             return CreatedAtAction(nameof(GetById), new { id = order.Id }, order);
+        }
+        catch (InventoryConcurrencyException exception)
+        {
+            return Conflict(exception.Message);
         }
         catch (ArgumentException exception)
         {
@@ -98,6 +103,10 @@ public class OrdersController : ControllerBase
             }
 
             return Ok(order);
+        }
+        catch (InventoryConcurrencyException exception)
+        {
+            return Conflict(exception.Message);
         }
         catch (InvalidOperationException exception)
         {
