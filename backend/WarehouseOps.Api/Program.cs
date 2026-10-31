@@ -92,6 +92,7 @@ builder.Services.AddAuthorization();
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
+builder.Services.AddScoped<ITransactionExecutor, EfTransactionExecutor>();
 
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
@@ -106,7 +107,12 @@ builder.Services.AddScoped<IInventoryRepository, InventoryRepository>();
 builder.Services.AddScoped<ICustomerService, CustomerService>();
 builder.Services.AddScoped<ICustomerRepository, CustomerRepository>();
 
-builder.Services.AddScoped<IOrderService, OrderService>();
+// Business rules remain in OrderService. The outer service supplies transactions.
+builder.Services.AddScoped<OrderService>();
+builder.Services.AddScoped<IOrderService>(provider =>
+    new TransactionalOrderService(
+        provider.GetRequiredService<OrderService>(),
+        provider.GetRequiredService<ITransactionExecutor>()));
 builder.Services.AddScoped<IOrderRepository, OrderRepository>();
 
 builder.Services.AddScoped<IShipmentService, ShipmentService>();
