@@ -127,6 +127,8 @@ public class InventoryService : IInventoryService
 
     private static void ValidateCreateRequest(CreateInventoryItemRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
         if (request.ProductId == Guid.Empty)
         {
             throw new ArgumentException("Product id is required.");
@@ -145,6 +147,8 @@ public class InventoryService : IInventoryService
 
     private static void ValidateUpdateRequest(UpdateInventoryItemRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
         if (request.QuantityInStock < 0)
         {
             throw new ArgumentException("Quantity in stock cannot be negative.");
