@@ -142,7 +142,7 @@ public class OrderService : IOrderService
             "Order",
             "Created",
             "System",
-            $"Created order {createdOrder.Id} for customer {createdOrder.Customer?.Name} with {createdOrder.OrderItems.Count} item(s) and total amount {createdOrder.TotalAmount}.");
+            $"Created order {createdOrder.Id} for customer {createdOrder.CustomerId} with {createdOrder.OrderItems.Count} item(s) and total amount {createdOrder.TotalAmount}.");
 
         return MapToDto(createdOrder);
     }
