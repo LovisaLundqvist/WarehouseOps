@@ -91,6 +91,7 @@ public class ShipmentService : IShipmentService
 
     public async Task<ShipmentDto?> UpdateStatusAsync(Guid id, UpdateShipmentStatusRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request);
         var newStatus = ParseStatus(request.Status);
 
         var shipment = await _shipmentRepository.GetByIdAsync(id);
@@ -133,6 +134,8 @@ public class ShipmentService : IShipmentService
 
     private static void ValidateCreateRequest(CreateShipmentRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
         if (request.OrderId == Guid.Empty)
         {
             throw new ArgumentException("Order id is required.");
@@ -141,6 +144,18 @@ public class ShipmentService : IShipmentService
         if (string.IsNullOrWhiteSpace(request.TrackingNumber))
         {
             throw new ArgumentException("Tracking number is required.");
+        }
+
+        var trackingNumber = request.TrackingNumber.Trim();
+
+        if (trackingNumber.Length > 100)
+        {
+            throw new ArgumentException("Tracking number cannot be longer than 100 characters.");
+        }
+
+        if (trackingNumber.Any(char.IsControl))
+        {
+            throw new ArgumentException("Tracking number cannot contain control characters.");
         }
     }
 
