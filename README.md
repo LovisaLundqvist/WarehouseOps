@@ -1,614 +1,215 @@
 # WarehouseOps
 
-WarehouseOps is a fullstack logistics and warehouse operations system built as a professional portfolio project.
+**Full-stack warehouse operations platform | ASP.NET Core · React · TypeScript · SQL Server**
 
-The system represents a fictional B2B technology import company that imports laptops, monitors, networking equipment, storage devices and accessories, then sells them to retailers such as Elgiganten, Power, Inet and Dustin.
+WarehouseOps is a portfolio project that simulates the day-to-day operations of a fictional B2B technology distributor. It brings product management, inventory, customers, orders, shipments, incidents and audit history into one web application.
 
-The goal of the project is to demonstrate practical skills in .NET, React, SQL Server, authentication, role based authorization, testing, Docker, GitHub Actions and security aware development.
+The project demonstrates how I design, implement, test and run a complete application, with particular attention to **backend architecture, data integrity, authentication, authorization and maintainability**. It is a **layered monolith**, deliberately chosen over microservices to keep the system cohesive and its complexity appropriate for the domain.
 
-## Tech stack
+**Current milestone (2 November 2026):** Core features are implemented and running locally with Docker Compose. ASP.NET Core Identity, JWT authentication and the three user roles have been verified with SQL Server. **223 backend tests passed**, and the frontend production build succeeded. Further OWASP testing and deployment hardening are planned.
 
-### Backend
+## Application preview
 
-* ASP.NET Core Web API
-* C#
-* Entity Framework Core
-* SQL Server
-* JWT authentication
-* Role based authorization
-* Swagger
-* xUnit
-* Moq
-* FluentAssertions
+**Sign in**
 
-### Frontend
+![WarehouseOps sign-in interface](docs/screenshots/Login.png)
 
-* React
-* TypeScript
-* Vite
-* React Router
-* Axios
-* TanStack React Query
-* React Hook Form
-* Zod
-* Tailwind CSS
-* Lucide React
-* Recharts
+**Operations dashboard**
 
-### DevOps
+![WarehouseOps dashboard showing orders, stock, incidents, shipments and recent activity](docs/screenshots/Dashboard.png)
 
-* Docker
-* Docker Compose
-* GitHub Actions
+<details>
+<summary><strong>View more screenshots</strong></summary>
 
-## Main features
+The sidebar adapts to the user's role. For example, Admin and Manager can access Change history, while WarehouseStaff cannot.
 
-* Login and logout
-* JWT based authentication
-* Role based access control
-* Product management
-* Inventory management
-* Customer management
-* Order management
-* Shipment management
-* Incident management
-* Dashboard with operational overview
-* Audit log for important changes
-* Frontend role based actions
-* Backend authorization for protected endpoints
-* Global exception handling
-* Backend service tests
-* GitHub Actions CI
-* Docker Compose setup with SQL Server, backend and frontend
-* Demo seed data for a B2B technology warehouse scenario
+| WarehouseStaff | Manager |
+|---|---|
+| ![WarehouseStaff dashboard and role-specific sidebar](docs/screenshots/WarehouseStaff.png) | ![Manager dashboard with Change history access](docs/screenshots/Manager.png) |
 
-## Screenshots
-
-### Login
-
-![Login](docs/screenshots/Login.png)
-
-### Dashboard
-
-![Dashboard](docs/screenshots/Dashboard.png)
-
-### Products
-
-![Products](docs/screenshots/Products.png)
-
-### Inventory
-
-![Inventory](docs/screenshots/Inventory.png)
-
-### Customers
-
-![Customers](docs/screenshots/Customers.png)
-
-### Orders
-
-![Orders](docs/screenshots/Orders.png)
-
-### Shipments
-
-![Shipments](docs/screenshots/Shipments.png)
-
-### Incidents
-
-![Incidents](docs/screenshots/Incidents.png)
-
-### Change History
-
-![Change History](docs/screenshots/ChangeHistory.png)
-
-### GitHub Actions CI
-
-![GitHub Actions CI](docs/screenshots/github-actions.png)
-
-### Docker Compose
-
-![Docker Compose](docs/screenshots/docker-compose.png)
-
-## Business scenario
-
-WarehouseOps is designed around a fictional technology import company.
-
-The company imports products such as:
-
-* ASUS ROG Zephyrus laptops
-* Apple MacBook Pro laptops
-* Lenovo ThinkPad laptops
-* Samsung monitors
-* Sony headphones
-* Logitech accessories
-* Ubiquiti networking hardware
-* Synology storage devices
-
-The company sells these products to B2B customers such as:
-
-* Elgiganten Sverige AB
-* Power Sverige AB
-* Inet AB
-* Dustin Sverige AB
-
-The system supports warehouse operations such as product handling, stock control, B2B order processing, shipment tracking, incident follow up and change history.
-
-## User roles
-
-WarehouseOps has three roles.
-
-### Admin
-
-Admin users have full administrative access.
-
-Admin can:
-
-* Create, update and delete products
-* Add products to inventory
-* Update inventory
-* Create and update customers
-* Create, update and cancel orders
-* Create shipments
-* Update shipment status
-* Report incidents
-* Update and close incidents
-* View audit logs
-* View dashboard
-
-### WarehouseStaff
-
-WarehouseStaff users handle daily warehouse operations.
-
-WarehouseStaff can:
-
-* View products
-* Add products to inventory
-* Update inventory
-* Create and update customers
-* Create, update and cancel orders
-* Create shipments
-* Update shipment status
-* Report incidents
-* Update and close incidents
-* View dashboard
-
-WarehouseStaff cannot:
-
-* Create, update or delete products
-* View audit logs
-
-### Manager
-
-Manager users have read only access to operational data and audit history.
-
-Manager can:
-
-* View dashboard
-* View products
-* View inventory
-* View customers
-* View orders
-* View shipments
-* View incidents
-* View audit logs
-
-Manager cannot:
-
-* Create, update or delete products
-* Update inventory
-* Create or update customers
-* Create, update or cancel orders
-* Create or update shipments
-* Report, update or close incidents
-
-## Demo login
-
-These accounts are only used for local development and portfolio demonstration.
-
-| Role | Email | Password |
+| Products | Inventory | Customers |
 |---|---|---|
-| Admin | admin@warehouseops.local | Admin123! |
-| WarehouseStaff | staff@warehouseops.local | Staff123! |
-| Manager | manager@warehouseops.local | Manager123! |
+| ![Products page](docs/screenshots/Products.png) | ![Inventory page](docs/screenshots/Inventory.png) | ![Customers page](docs/screenshots/Customers.png) |
 
-## Security features
-
-WarehouseOps includes several security focused implementation choices.
-
-* JWT authentication
-* Role based authorization in backend controllers
-* Protected frontend routes
-* Role based UI actions
-* Passwords are stored as PBKDF2 hashes, not plain text
-* JWT secret is loaded through user secrets locally or environment variables in Docker
-* Secrets are not stored in `appsettings.json`
-* Database access uses Entity Framework Core
-* No raw SQL is used with user input
-* Global exception handling prevents internal server errors from being exposed to users
-* Audit logs record important business changes
-* Audit logs use the current authenticated user when changes are made
-* Docker Compose binds frontend and backend ports to `127.0.0.1`
-* SQL Server is only exposed inside the Docker network
-* Demo seed data uses fictional business data and example email domains
-
-## Architecture
-
-The backend follows a layered architecture.
-
-```text
-WarehouseOps.Api
-WarehouseOps.Application
-WarehouseOps.Domain
-WarehouseOps.Infrastructure
-WarehouseOps.Tests
-```
-
-### WarehouseOps.Api
-
-The API layer contains:
-
-* Controllers
-* Authentication setup
-* Authorization setup
-* Middleware
-* Swagger configuration
-* Current user service
-
-Controllers handle HTTP requests and responses. They do not contain business logic.
-
-### WarehouseOps.Application
-
-The application layer contains:
-
-* DTOs
-* Service interfaces
-* Business services
-* Business validation
-* Use case rules
-
-Services contain the main business logic.
-
-### WarehouseOps.Domain
-
-The domain layer contains:
-
-* Entities
-* Enums
-* Shared base entity
-
-This layer represents the core business model.
-
-### WarehouseOps.Infrastructure
-
-The infrastructure layer contains:
-
-* Entity Framework Core DbContext
-* Repositories
-* SQL Server persistence
-* JWT token implementation
-* Database migrations
-* Demo seed data
-
-### WarehouseOps.Tests
-
-The test project contains backend service tests.
-
-The current tests cover:
-
-* ProductService
-* InventoryService
-* OrderService
-* ShipmentService
-* IncidentService
-
-## Project structure
-
-```text
-WarehouseOps/
-  backend/
-    WarehouseOps.Api/
-    WarehouseOps.Application/
-    WarehouseOps.Domain/
-    WarehouseOps.Infrastructure/
-    WarehouseOps.Tests/
-  frontend/
-    warehouseops-client/
-  docs/
-  .github/
-    workflows/
-      ci.yml
-  docker-compose.yml
-  README.md
-```
-
-## Backend API areas
-
-The backend includes APIs for:
-
-* Authentication
-* Dashboard
-* Products
-* Inventory
-* Customers
-* Orders
-* Shipments
-* Incidents
-* Audit logs
-
-Swagger is available locally at:
-
-```text
-http://localhost:5059/swagger
-```
-
-## Frontend
-
-The frontend is a React TypeScript application.
-
-It includes pages for:
-
-* Login
-* Dashboard
-* Products
-* Inventory
-* Customers
-* Orders
-* Shipments
-* Incidents
-* Change History
-
-The frontend uses React Query for server state, Axios for API calls, Zod and React Hook Form for validation, Tailwind CSS for styling and Recharts for dashboard charts.
-
-## Running with Docker Compose
-
-Docker Desktop must be installed and running.
-
-Create a local `.env` file from the example file:
-
-```powershell
-Copy-Item .\.env.example .\.env
-```
-
-Start the full system:
-
-```powershell
-docker compose up -d
-```
-
-Open the frontend:
-
-```text
-http://localhost:3000
-```
-
-Open Swagger:
-
-```text
-http://localhost:5059/swagger
-```
-
-Stop the system:
-
-```powershell
-docker compose down
-```
-
-Stop the system and remove the Docker database volume:
-
-```powershell
-docker compose down -v
-```
-
-Use `docker compose down -v` only when you want to reset the Docker database.
-
-## Docker setup
-
-Docker Compose starts three services:
-
-| Service | Description | Access |
+| Orders | Shipments | Incidents |
 |---|---|---|
-| sqlserver | SQL Server database | Internal Docker network only |
-| backend | ASP.NET Core Web API | http://localhost:5059 |
-| frontend | React app served by Nginx | http://localhost:3000 |
+| ![Orders page](docs/screenshots/Orders.png) | ![Shipments page](docs/screenshots/Shipments.png) | ![Incidents page](docs/screenshots/Incidents.png) |
 
-The SQL Server container is not exposed to the host machine. Backend and frontend are bound to `127.0.0.1`.
+![Audit change history page](docs/screenshots/ChangeHistory.png)
 
-## Demo seed data
+</details>
 
-The Docker setup includes demo seed data.
+## Engineering highlights
 
-Seed data is enabled through:
+| Challenge | Implementation |
+|---|---|
+| **Maintainable backend structure** | Separate `Api`, `Application`, `Domain` and `Infrastructure` projects. Controllers handle HTTP; application services own business rules; repositories encapsulate EF Core persistence. |
+| **Consistent business operations** | Transaction decorators wrap changes to products, inventory, customers, orders, shipments and incidents, so related database writes and audit records can commit or roll back together. |
+| **Concurrent inventory updates** | SQL Server `rowversion` provides optimistic concurrency checking for inventory records. Concurrency exceptions are translated into an application-specific error. |
+| **Authentication and access control** | ASP.NET Core Identity stores users, roles and password hashes in SQL Server. Successful login produces a signed JWT. Backend endpoints enforce `Admin`, `WarehouseStaff` and `Manager` permissions. |
+| **Traceability** | Audit entries record important business changes, including the authenticated user's identity, while access to audit history is restricted by role. |
+| **Repeatable verification** | xUnit, Moq, FluentAssertions and HTTP integration tests cover business rules, JWT validation and authorization. GitHub Actions builds and tests the backend and builds the frontend. |
 
-```text
-Database__SeedDemoData=true
-```
+These choices are implemented in the repository, not only described in documentation. The tests provide evidence for specific behaviors; they do not imply that every production scenario has been verified.
 
-The seed data is only inserted when the database has no products.
+## Technology stack
 
-The seeded data includes:
+| Area | Technologies |
+|---|---|
+| Backend | C#, .NET 10, ASP.NET Core Web API, Entity Framework Core 10, SQL Server, ASP.NET Core Identity, JWT, Swagger |
+| Frontend | React, TypeScript, Vite, React Router, Axios, TanStack React Query, React Hook Form, Zod, Tailwind CSS, Lucide React, Recharts |
+| Tests | xUnit, Moq, FluentAssertions, ASP.NET Core `WebApplicationFactory` |
+| DevOps | Docker, Docker Compose, GitHub Actions |
 
-* Products
-* Inventory items
-* Customers
-* Orders
-* Order items
-* Shipments
-* Incidents
-* Audit logs
+## Core functionality
 
-This makes the Docker version useful immediately after startup.
+- **Products:** Create, browse, update, delete, search and filter products. Protect records referenced by inventory or orders.
+- **Inventory:** Track quantities, minimum stock levels and low-stock items; prevent invalid stock changes.
+- **Customers:** Maintain customer records for the fictional B2B operation.
+- **Orders:** Create orders, manage statuses, reserve available stock and restore stock when eligible orders are cancelled.
+- **Shipments:** Associate shipments with orders and track delivery status.
+- **Incidents:** Report, update, resolve and close warehouse-related incidents.
+- **Dashboard:** View active orders, low-stock alerts, open incidents, shipments, order status distribution and recent activity.
+- **Audit history:** Track significant operational changes with actor and timestamp information.
 
-## Running locally without Docker
+### Roles and permissions
 
-### Backend
+| Permission | Admin | WarehouseStaff | Manager |
+|---|:---:|:---:|:---:|
+| Read operational data and dashboard | Yes | Yes | Yes |
+| Manage product catalog | Yes | No | No |
+| Manage inventory | Yes | Yes | No |
+| Manage customers and orders | Yes | Yes | No |
+| Manage shipments and incidents | Yes | Yes | No |
+| View audit history | Yes | No | Yes |
 
-Set the JWT secret using user secrets:
+**Authorization is enforced by the API.** The frontend also adjusts available navigation and actions, but hiding a button is not treated as a security control.
 
-```powershell
-cd backend/WarehouseOps.Api
-dotnet user-secrets set "Jwt:SecretKey" "REPLACE_WITH_STRONG_LOCAL_JWT_SECRET_AT_LEAST_32_CHARACTERS"
-```
+## Architecture and design decisions
 
-Run the API:
+| Project | Responsibility |
+|---|---|
+| `WarehouseOps.Api` | Controllers, HTTP middleware, JWT bearer validation, role authorization and Swagger |
+| `WarehouseOps.Application` | Use-case services, business validation, DTOs, interfaces and transaction decorators |
+| `WarehouseOps.Domain` | Business entities and enums |
+| `WarehouseOps.Infrastructure` | EF Core DbContext, SQL Server repositories, migrations, ASP.NET Core Identity and JWT generation |
+| `WarehouseOps.Tests` | Business-rule tests, HTTP security integration tests and EF model tests |
 
-```powershell
-cd backend/WarehouseOps.Api
-dotnet run
-```
+**Why a layered monolith?** The system needs clear boundaries between business rules, persistence and HTTP, but does not require independently deployed services. One backend keeps local development and testing straightforward while still demonstrating separation of concerns and dependency inversion.
 
-Swagger will be available at:
+**Why explicit transaction boundaries?** An order operation may affect multiple records, including inventory and audit history. Transaction decorators keep this coordination outside controllers and prevent a partially committed business operation if an exception occurs.
 
-```text
-http://localhost:5059/swagger
-```
+**Why optimistic concurrency?** Two warehouse users could edit the same inventory record. A database `rowversion` allows EF Core to detect conflicting updates rather than silently accepting the last write.
 
-If the local database is empty, apply EF Core migrations from the backend folder:
+For implementation detail, see [Architecture](docs/architecture.md), [Database design](docs/database_design.md) and [SOLID and GRASP](docs/design_principles_solid_grasp.md).
+
+## Security
+
+The current implementation includes:
+
+- ASP.NET Core Identity for users, password hashing, email confirmation requirements, role membership and configured account lockout.
+- Signed JWT bearer tokens with issuer, audience, signing-key and expiration validation.
+- Backend role authorization and HTTP `401`/`403` behavior for protected routes.
+- Per-IP login rate limiting, configured for five requests per minute.
+- EF Core LINQ queries rather than concatenated raw SQL using user input.
+- Backend input validation, safe exception responses, and audit logging.
+- Secrets loaded from local configuration rather than committed source files.
+- Docker ports restricted to localhost, with SQL Server kept on the internal Docker network.
+
+**Security verification completed:** HTTP tests for JWT validation and role restrictions, plus manual checks using real local Identity accounts and the running SQL Server. Tested responses included `401` for anonymous or invalid-token requests, `403` for forbidden operations and `404` for an authorized request targeting a nonexistent product.
+
+**Known limitations:** The React app currently stores its JWT in `localStorage`. Signing out removes the browser's token but does not revoke an already-issued token server-side. The Docker setup is for local development, not a hardened HTTPS deployment. Identity account lockout still needs dedicated real-database verification.
+
+**Planned, not yet performed:** SQL Injection payload testing, broader OWASP negative tests, object-level access checks, mass-assignment checks and additional database-backed security tests. Using EF Core reduces SQL Injection risk but is not proof of completed penetration testing.
+
+See [Security and OWASP](docs/security_owasp.md) for controls, evidence and open issues.
+
+## Testing and CI
+
+**Latest verified local run, 2 November 2026: 223 passed, 0 failed, 0 skipped.**
 
 ```powershell
 cd backend
-dotnet ef database update --project WarehouseOps.Infrastructure --startup-project WarehouseOps.Api
+dotnet restore WarehouseOps.sln
+dotnet build WarehouseOps.sln --no-restore
+dotnet test WarehouseOps.sln
 ```
 
-### Frontend
+The automated suite covers business rules, validation, transactional behavior, inventory concurrency, authentication-service logic, JWT validation, role authorization and Identity model mapping. HTTP tests use `WebApplicationFactory`; many use mocked dependencies, so they do not constitute a full database end-to-end suite.
 
-Install dependencies:
+Additional manual checks confirmed successful SQL Server-backed logins for all three roles, correct API permissions, dashboard data and browser logout.
+
+Frontend build:
 
 ```powershell
 cd frontend/warehouseops-client
 npm install
+npm run build
 ```
 
-Run the frontend:
+[GitHub Actions CI](.github/workflows/ci.yml) runs .NET restore, build and tests, as well as the frontend install and build, on pushes and pull requests to `main`. Docker image builds and penetration tests are not currently part of CI.
+
+See [Testing](docs/testing.md) for detailed coverage and limitations.
+
+## Run locally with Docker
+
+**Prerequisite:** Docker Desktop with Docker Compose.
 
 ```powershell
-npm run dev
+git clone https://github.com/LovisaLundqvist/WarehouseOps.git
+cd WarehouseOps
+Copy-Item .env.example .env
+notepad .env
 ```
 
-The frontend will be available at:
+Set all placeholder values in `.env`. `JWT_SECRET_KEY` must be at least 32 characters. The three demo passwords must be different and comply with the Identity password policy: at least 12 characters, uppercase, lowercase, a digit and a special character.
 
-```text
-http://localhost:5173
+```dotenv
+SA_PASSWORD=REPLACE_WITH_STRONG_LOCAL_SQL_PASSWORD
+JWT_SECRET_KEY=REPLACE_WITH_STRONG_LOCAL_JWT_SECRET_AT_LEAST_32_CHARACTERS
+DEMO_ADMIN_PASSWORD=REPLACE_WITH_STRONG_LOCAL_ADMIN_PASSWORD
+DEMO_STAFF_PASSWORD=REPLACE_WITH_STRONG_LOCAL_STAFF_PASSWORD
+DEMO_MANAGER_PASSWORD=REPLACE_WITH_STRONG_LOCAL_MANAGER_PASSWORD
 ```
 
-## Running tests
-
-Run backend tests:
+**Do not commit `.env`.** The repository's `.env.example` contains placeholders only.
 
 ```powershell
-cd backend
-dotnet test
+docker compose config --quiet
+docker compose up -d --build
+docker compose ps
 ```
 
-The current backend test suite includes 50 service tests using:
+| Service | Local address |
+|---|---|
+| React frontend | http://localhost:3000 |
+| Swagger UI (Development) | http://localhost:5059/swagger |
+| SQL Server | Internal Docker network only |
 
-* xUnit
-* Moq
-* FluentAssertions
+The local Development environment applies EF Core migrations and seeds fictional business data. It also provisions demo Identity users when enabled in Docker Compose.
 
-The tests cover business rules for:
+| Role | Email | Password |
+|---|---|---|
+| Admin | `admin@warehouseops.local` | Local `DEMO_ADMIN_PASSWORD` |
+| WarehouseStaff | `staff@warehouseops.local` | Local `DEMO_STAFF_PASSWORD` |
+| Manager | `manager@warehouseops.local` | Local `DEMO_MANAGER_PASSWORD` |
 
-* Products
-* Inventory
-* Orders
-* Shipments
-* Incidents
+Demo provisioning does not reset an existing user's password when `.env` changes. These accounts are intended only for local demonstrations.
 
-## GitHub Actions
+```powershell
+# Stop containers but retain database data
+docker compose down
 
-The project includes a GitHub Actions CI workflow.
-
-The workflow runs on push and pull request to `main`.
-
-It checks:
-
-* Backend restore
-* Backend build
-* Backend tests
-* Frontend dependency installation
-* Frontend build
-
-Workflow file:
-
-```text
-.github/workflows/ci.yml
+# CAUTION: Removes the SQL Server database volume and its data
+docker compose down -v
 ```
 
-## Important business rules
+For standalone development, the backend can use a separately configured local SQL Server/LocalDB instance and the frontend can be started with `npm run dev` from `frontend/warehouseops-client`. The local backend database is not automatically the same database as the Docker instance.
 
-### Products
+## Project status and next steps
 
-* Product name is required.
-* SKU is required.
-* Category is required.
-* Price cannot be negative.
-* SKU must be unique.
-* Products used in inventory or order history cannot be deleted.
+**Implemented:** Business APIs and React screens, dashboard, audit history, EF Core migrations, Identity accounts, JWT authorization, local Docker deployment, GitHub Actions and automated backend tests.
 
-### Inventory
+**Next priorities:** Verify Identity lockout behavior; execute and document SQL Injection and broader OWASP security tests; extend database-backed integration tests; review JWT storage and revocation; improve production-oriented configuration and deployment security.
 
-* Inventory is connected to products.
-* Quantity in stock cannot be negative.
-* Minimum stock level cannot be negative.
-* A product can only have one inventory item.
-* Low stock is detected when quantity is below minimum stock level.
-
-### Orders
-
-* Orders must have a valid customer.
-* Orders must contain at least one item.
-* The same product cannot be added more than once to the same order.
-* Products must exist in inventory before they can be ordered.
-* Orders cannot reserve more stock than available.
-* Cancelling an order returns items to inventory.
-* Shipped and completed orders cannot be cancelled.
-
-### Shipments
-
-* A shipment must be connected to an order.
-* Cancelled orders cannot get shipments.
-* An order can only have one shipment.
-* Delivered and cancelled shipments cannot be changed.
-
-### Incidents
-
-* Title is required.
-* Description is required.
-* Severity must be valid.
-* Related entity type must be valid.
-* Closed incidents cannot be reopened.
-* Resolution notes are required when closing an incident.
-
-## Current project status
-
-Implemented:
-
-* Backend solution structure
-* Domain entities and enums
-* EF Core infrastructure
-* Product API
-* Inventory API
-* Customer API
-* Order API
-* Shipment API
-* Incident API
-* Dashboard API
-* Audit log API
-* Login and JWT authentication
-* Role based backend authorization
-* React frontend layout
-* React pages for all main business areas
-* Role based frontend actions
-* Global exception handling
-* Audit log with current user
-* Backend service tests
-* GitHub Actions CI
-* Docker Compose setup
-* Demo seed data
-
-Remaining improvements:
-
-* Update all documentation files in `docs/`
-* Add more integration tests
-* Optionally add Docker build validation to GitHub Actions
-* Optionally add stricter database uniqueness constraints
-* Replace demo users with ASP.NET Identity for a production version
-* Improve token handling for production, for example with HttpOnly cookies or refresh token flow
+WarehouseOps is an evolving **engineering portfolio project**, not a deployed commercial product or an independently audited security solution. Claims in this README reflect implemented code and the tests completed so far.

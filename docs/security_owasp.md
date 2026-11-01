@@ -1,316 +1,169 @@
-# Security and OWASP
+# WarehouseOps: Security and OWASP
 
-This document describes how WarehouseOps applies security aware development practices and how the implementation relates to common OWASP risks.
+**Last reviewed:** 2 November 2026
+**Scope:** Local development and portfolio demonstration, not a production security certification.
 
-WarehouseOps is a portfolio project, but the security decisions are implemented in practical code rather than only described in theory.
+This document separates security measures implemented in code, controls exercised by automated or manual tests, and tests or mitigations still planned. OWASP category references below use the **OWASP Top 10: 2021** classification.
 
-## Security goals
+## Security objectives
 
-The main security goals are:
+- Authenticate API requests and authorize operations by role in the backend.
+- Store password hashes through a standard identity framework, not plain-text passwords.
+- Keep application secrets out of source control.
+- Use safe database queries and validate input at trust boundaries.
+- Avoid exposing internal exception details through HTTP responses.
+- Record important business operations in audit history.
+- Limit attack surface in the local Docker environment.
+- Verify important security behavior with regression tests.
 
-* Protect backend endpoints with authentication.
-* Enforce role based authorization in the backend.
-* Avoid exposing sensitive technical errors to users.
-* Avoid storing secrets in source control.
-* Avoid storing passwords in plain text.
-* Validate input in both frontend and backend.
-* Avoid raw SQL with user input.
-* Keep audit logs for important business changes.
-* Limit exposed ports in Docker Compose.
+## Authentication and Identity
 
-## Authentication
+`POST /api/Auth/login` accepts an email address and password. The backend uses `IAuthUserAuthenticator` and an Infrastructure implementation based on `UserManager<ApplicationUser>` and `SignInManager<ApplicationUser>`.
 
-WarehouseOps uses JWT based authentication.
+ASP.NET Core Identity stores users, roles, credentials, lockout state and related records in SQL Server using the standard `AspNet*` tables. Password storage is handled by Identity's password hasher. Passwords are never stored as plain text in the business model.
 
-The login endpoint is:
+Configured Identity options in `WarehouseOps.Api/Program.cs` include:
 
-POST /api/Auth/login
+- Unique email addresses.
+- Confirmed email required for sign-in.
+- Passwords at least 12 characters long, requiring uppercase, lowercase, digits and a non-alphanumeric character.
+- Account lockout after five failed password attempts, for 15 minutes.
+- Login endpoint rate limiting of five requests per client IP per minute, with no queue.
 
-When login succeeds, the backend returns:
+**Verification status:** Successful real SQL Server logins were confirmed for `Admin`, `WarehouseStaff` and `Manager`. The rate-limiter has automated HTTP test coverage. The Identity account-lockout threshold itself has **not yet been separately verified against SQL Server**.
 
-* JWT token
-* Expiration time
-* Email
-* Display name
-* Role
+### Development demo identities
 
-The frontend sends the token in later requests using:
+`DemoIdentitySeeder` creates local demonstration identities using password values supplied through configuration. It runs only when the host environment is `Development` and `Database:SeedDemoUsers` is enabled. The three password values are supplied by Docker environment variables derived from the ignored local `.env` file:
 
-Authorization: Bearer token
-
-The backend validates:
-
-* Token issuer
-* Token audience
-* Signing key
-* Expiration time
-* Role claims
-
-## Demo users
-
-The current version uses demo users for portfolio and local development.
-
-Demo users exist for:
-
-* Admin
-* WarehouseStaff
-* Manager
-
-Passwords are not stored as plain text. They are stored as PBKDF2 hashes.
-
-For a production system, demo users should be replaced with ASP.NET Identity or another production ready identity provider.
-
-## Password handling
-
-Passwords are verified using PBKDF2 based hashing.
-
-The stored password format contains:
-
-* Algorithm marker
-* Iteration count
-* Salt
-* Hash
-
-The password verification uses fixed time comparison to reduce timing based comparison risk.
-
-Plain text passwords are not stored.
-
-## Authorization
-
-Authorization is enforced in backend controllers using role based authorization.
-
-This is important because frontend checks alone are not secure.
-
-Examples:
-
-* Manager can read products, orders, shipments, incidents and audit logs.
-* Manager cannot create or update operational records.
-* WarehouseStaff can manage warehouse operations.
-* WarehouseStaff cannot view audit logs.
-* Only Admin can create, update and delete products directly.
-
-The frontend also hides actions that the current user is not allowed to perform, but backend authorization is the real security boundary.
-
-## OWASP A01 Broken Access Control
-
-Broken access control is handled by requiring authentication and checking roles in backend endpoints.
-
-Examples of protected behavior:
-
-* Manager receives 403 Forbidden when trying to create incidents.
-* Manager cannot create orders, update shipments or change inventory.
-* WarehouseStaff cannot access audit logs.
-* Product write operations are limited to Admin.
-
-Frontend role based rendering improves usability, but the backend still blocks unauthorized requests.
-
-## OWASP A02 Cryptographic Failures
-
-WarehouseOps avoids plain text password storage.
-
-Security related choices:
-
-* Passwords are stored as PBKDF2 hashes.
-* JWT secret is not stored in appsettings.json.
-* JWT secret is loaded from user secrets locally.
-* JWT secret is loaded from environment variables in Docker.
-* .env is ignored by Git.
-* .env.example shows required variables without being the real secret store.
-
-For production, secret management should be moved to a dedicated secret manager.
-
-## OWASP A03 Injection
-
-WarehouseOps uses Entity Framework Core for database access.
-
-The project does not build raw SQL strings from user input.
-
-Input is passed through service methods and EF Core queries instead of manually concatenated SQL.
-
-This reduces SQL injection risk.
-
-## OWASP A04 Insecure Design
-
-WarehouseOps separates responsibilities across layers.
-
-Design choices:
-
-* Controllers handle HTTP only.
-* Services contain business rules.
-* Repositories contain persistence logic.
-* Domain contains entities and enums.
-* Tests verify important business rules.
-
-Examples of business rules:
-
-* Orders cannot reserve more stock than available.
-* Products must exist in inventory before they can be ordered.
-* Cancelled orders cannot receive shipments.
-* Closed incidents cannot be reopened.
-* Resolution notes are required when closing incidents.
-
-## OWASP A05 Security Misconfiguration
-
-WarehouseOps includes configuration choices to reduce misconfiguration risk.
-
-Implemented choices:
-
-* Docker Compose binds frontend and backend to 127.0.0.1.
-* SQL Server is not exposed to the host machine in Docker Compose.
-* Swagger is only enabled in Development.
-* JWT secret length is checked during startup.
-* Global exception handling is registered in the API pipeline.
-
-Docker access:
-
-| Service | Exposure |
+| Account | Configuration key in `.env` |
 |---|---|
-| frontend | 127.0.0.1:3000 |
-| backend | 127.0.0.1:5059 |
-| sqlserver | Internal Docker network only |
+| Admin | `DEMO_ADMIN_PASSWORD` |
+| WarehouseStaff | `DEMO_STAFF_PASSWORD` |
+| Manager | `DEMO_MANAGER_PASSWORD` |
 
-## OWASP A07 Identification and Authentication Failures
+The frontend exposes demo **email addresses**, not passwords. The seeder checks existing users and does not silently replace their passwords or assign an unexpected role. Demo account provisioning is for the development environment, not production.
 
-WarehouseOps uses token based authentication and role claims.
+## JWT handling
 
-Implemented choices:
+The application issues a signed JWT after successful Identity authentication. The JWT bearer middleware validates issuer, audience, signature and lifetime, and controllers enforce role claims. An invalid token produces an HTTP `401`; a valid token without sufficient permissions produces `403`.
 
-* Users must log in before accessing protected endpoints.
-* Invalid credentials return an unauthorized response.
-* JWT tokens expire.
-* Role claims are included in the token and checked by the backend.
+The React application currently saves the login state and JWT in browser `localStorage`. Logout removes that local state and the interface returns to the login screen. This **does not invalidate the JWT on the server**; any previously copied token can remain usable until its expiry. Because `localStorage` can be read by JavaScript executing on the page, a future XSS vulnerability could expose the token. A production-ready design needs a separate assessment of secure session storage, HTTPS, revocation and token rotation.
 
-Current limitation:
+JWT checks currently covered by automated HTTP tests include invalid signing key, issuer, audience, expired token, not-yet-valid token, unsigned token and missing role claim.
 
-* Demo users are hardcoded for local development.
-* There is no refresh token flow.
-* Token storage is suitable for the portfolio version, not a production identity architecture.
+## Authorization and OWASP A01: Broken Access Control
 
-## OWASP A09 Security Logging and Monitoring Failures
+Authorization is defined in the backend, principally with ASP.NET Core role authorization attributes. Frontend role-based rendering is a usability feature and is **not** treated as the security boundary.
 
-WarehouseOps includes audit logging for important business changes.
+| Permission | Admin | WarehouseStaff | Manager |
+|---|:---:|:---:|:---:|
+| Read products and business data | Yes | Yes | Yes |
+| Write products | Yes | No | No |
+| Manage warehouse operations | Yes | Yes | No |
+| View audit history | Yes | No | Yes |
 
-Audit logs store:
+Verified checks include:
 
-* Entity name
-* Action
-* Performed by
-* Performed at
-* Change description
+- Anonymous read of products returns `401`.
+- Invalid JWT for a protected operation returns `401`.
+- WarehouseStaff access to audit logs returns `403`.
+- Manager and WarehouseStaff attempts to delete a product return `403`.
+- Admin deletion of a deliberately nonexistent product reaches the endpoint and returns `404`.
+- Admin and Manager can read audit history; all three roles can read products.
 
-Audit logs use the currently authenticated user when available.
+The delete test used a newly generated GUID, so it did not intentionally remove data. Automated HTTP integration tests also check that unauthorized service methods are not executed.
 
-Examples:
+**Open work:** Broader resource ownership checks and IDOR/BOLA testing on individual entities and nested API routes.
 
-* Product created by Admin
-* Inventory updated by WarehouseStaff
-* Order status changed
-* Shipment status changed
-* Incident closed
+## OWASP A02: Cryptographic Failures
 
-This supports traceability and makes it possible to see who changed what and when.
+- Password hashing is delegated to ASP.NET Core Identity.
+- The JWT signing secret is supplied from user secrets or environment configuration and validated for minimum length at startup.
+- `.env` is ignored by Git; `.env.example` contains only placeholders.
+- Docker restricts the app's exposed ports to localhost.
 
-## Global exception handling
+**Limitations:** The local Docker setup uses HTTP; production deployments would require TLS termination and appropriate security headers. ASP.NET Core Data Protection emitted warnings because keys are stored inside the ephemeral API container and are not encrypted at rest. Those settings need dedicated production configuration if Data Protection-dependent functionality is introduced.
 
-The API includes global exception handling middleware.
+## OWASP A03: Injection
 
-The purpose is to avoid returning internal technical details to users.
+The application uses Entity Framework Core repositories and LINQ for normal database operations, rather than constructing raw SQL with user-supplied values. This reduces SQL Injection risk, but code structure alone is **not equivalent to completed adversarial testing**.
 
-Unexpected exceptions are logged server side and returned as a safe error response.
+**Status: planned, not yet completed.** The next dedicated security-testing phase will:
 
-The response includes:
+1. Review all repository code for raw SQL execution and unsafe dynamic query building.
+2. Exercise input paths such as product search, categories, customer lookups and other query parameters with malicious-looking values.
+3. Verify that input is handled as data, SQL errors are not disclosed, and unauthorized records are not returned.
+4. Verify that existing database records and tables remain unchanged and add suitable regression tests.
+5. Conduct the tests only in an isolated local test environment with disposable data or a backup.
 
-* Title
-* Safe message
-* Status code
-* Trace id
+Example input strings for that future local test phase include `' OR '1'='1` and `'; DROP TABLE Products;--`. These strings are listed as **test cases**, not evidence that a test has already passed.
 
-It does not return SQL errors or stack traces to the user.
+## OWASP A04: Insecure Design
 
-## Input validation
+Business rules are implemented in application services rather than controllers. Repositories isolate persistence. Domain entities and enums represent business concepts. Tests cover invalid order states, insufficient stock, duplicate records, terminal shipment/incident statuses and audit changes.
 
-WarehouseOps validates input in both frontend and backend.
+The transaction decorators in the Application layer manage related business mutations and help avoid partially completed operations.
 
-Frontend validation uses:
+**Open work:** Threat modelling and a systematic review of concurrent operations and cross-entity invariants.
 
-* Zod
-* React Hook Form
+## OWASP A05: Security Misconfiguration
 
-Backend validation is implemented in application services.
+Current local-development configuration includes:
 
-Examples:
+- Swagger only in Development.
+- A startup check for the JWT secret length.
+- SQL Server available only on the internal Docker network, without a host port mapping.
+- API bound to `127.0.0.1:5059`; frontend bound to `127.0.0.1:3000`.
+- Authentication and authorization middleware enabled for protected endpoints.
+- Environment-based credentials rather than hardcoded secrets.
 
-* Product name is required.
-* SKU is required.
-* Price cannot be negative.
-* Inventory quantity cannot be negative.
-* Orders must contain at least one item.
-* Incident title and description are required.
-* Resolution notes are required when closing an incident.
+**Open work:** Deployment TLS, Data Protection key persistence and encryption, HTTP security headers, reverse-proxy configuration, production secret manager and environment-specific hardening.
 
-Frontend validation improves user experience. Backend validation protects the system.
+## OWASP A07: Identification and Authentication Failures
 
-## Secrets
+ASP.NET Core Identity is implemented rather than a static list of demo password hashes. There are multiple defenses on the login endpoint: Identity password verification, account lockout configuration and per-IP rate limiting.
 
-Secrets are not committed to the repository.
+**Verified:** Correct logins for all three roles, invalid credential rejection, login request rate limit and JWT token validation tests. **To verify:** Lockout duration, account recovery, interactions between rate limiting and lockout, and server-side token invalidation or shortened session lifetime.
 
-Local development uses user secrets for the JWT secret.
+## OWASP A09: Security Logging and Monitoring Failures
 
-Docker uses environment variables from .env.
+The application stores audit history for important operational changes. Audit entries include the entity, action, actor, time and change description. Backend access to audit history is limited to `Admin` and `Manager`. Audit records support traceability but are not a complete intrusion-detection or security-monitoring system.
 
-The repository contains .env.example to show which variables are needed.
+**Open work:** Dedicated authentication/security event logging, centralized log retention, correlation and alerting without exposing secrets or full tokens.
 
-The real .env file is ignored by Git.
+## Input validation and error handling
 
-## Audit log access
+The React frontend uses Zod and React Hook Form for client-side validation. Backend services independently validate domain inputs, including required fields, enum validity, non-negative inventory values and order status constraints.
 
-Audit logs are sensitive because they show operational activity.
+A global exception-handling middleware produces safe responses for unexpected exceptions, while retaining server-side diagnostics. The HTTP surface should not disclose SQL query text, connection credentials or stack traces.
 
-Access is limited to:
+**Open work:** Negative tests for oversized inputs, encoding edge cases, malformed JSON, attempted mass assignment and technical exception disclosure across all endpoint groups.
 
-* Admin
-* Manager
+## Security test evidence
 
-WarehouseStaff users create audit log entries through their actions, but they cannot view the audit log page.
+| Control | Method | Latest confirmed result |
+|---|---|---|
+| Service rules, HTTP authentication/authorization, JWT validation and model checks | `dotnet test WarehouseOps.sln` | 223 passed, 0 failed, 0 skipped |
+| Development Identity login via SQL Server | Manual local HTTP calls | Admin, WarehouseStaff, Manager succeeded |
+| Anonymous product read | Manual local HTTP call | `401` |
+| Malformed JWT | Manual local HTTP call | `401` |
+| Restricted product delete | Manual local HTTP calls | WarehouseStaff `403`, Manager `403` |
+| Admin delete with nonexistent GUID | Manual local HTTP call | `404` |
+| Audit-history read policy | Manual local HTTP calls | Admin/Manager `200`, WarehouseStaff `403` |
+| Role-specific browser UI and logout | Manual browser checks | Verified in local Docker frontend |
+| SQL Injection penetration tests | Planned | Not yet executed |
+| Real-database lockout tests | Planned | Not yet executed |
 
-## Docker security choices
+All confirmed results above were obtained for the local portfolio implementation by 2 November 2026. The automated HTTP suite generally uses mocks and is not a substitute for a full database-backed end-to-end security test.
 
-The Docker Compose setup is intentionally limited to local access.
+## Remaining security priorities
 
-Security choices:
+1. Verify Identity lockout and rate-limiting edge cases.
+2. Test SQL Injection and unsafe input handling against a local disposable dataset.
+3. Expand access-control tests for object-level permissions and mass assignment.
+4. Test unexpected-error responses for sensitive information disclosure.
+5. Review JWT storage, expiry and revocation strategy.
+6. Harden configuration for any deployment beyond localhost.
 
-* Backend is bound to 127.0.0.1.
-* Frontend is bound to 127.0.0.1.
-* SQL Server has no public port mapping.
-* SQL Server is only reachable by backend inside the Docker network.
-* Environment variables are used for local Docker secrets.
-* Demo data uses fictional company data.
-
-## Current security limitations
-
-The following items are known limitations and possible future improvements:
-
-* Replace demo users with ASP.NET Identity.
-* Add refresh token support.
-* Add stricter database uniqueness constraints.
-* Add rate limiting to login.
-* Add integration tests for authorization rules.
-* Add centralized structured logging.
-* Use a production secret manager for deployment.
-* Improve frontend token storage for a production environment.
-
-## Summary
-
-WarehouseOps demonstrates security aware development through practical implementation:
-
-* Authenticated API access
-* Backend role based authorization
-* Password hashing
-* Environment based secrets
-* Safe error handling
-* EF Core based persistence
-* Input validation
-* Audit logging
-* Local only Docker exposure
-
-The main security principle is that protected actions must be enforced by the backend, not only hidden in the frontend.
+The guiding principle remains: **authorization belongs in the backend, and security claims require test evidence.**

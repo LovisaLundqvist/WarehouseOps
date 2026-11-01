@@ -1,249 +1,148 @@
-# Testing
+# WarehouseOps: Testing
 
-This document describes the testing approach for WarehouseOps.
+**Last verified:** 2 November 2026
+**Latest backend result:** **223 tests passed, 0 failed, 0 skipped**.
 
-WarehouseOps uses backend service tests to verify important business rules in the Application layer.
+This document describes the automated and manual testing performed so far, explains which infrastructure the tests exercise, and distinguishes tested behavior from planned improvements.
 
-The goal of the tests is to show that core warehouse operations behave correctly and that invalid business actions are rejected.
+## Tools and environments
 
-## Test tools
+- **xUnit:** .NET test framework.
+- **Moq:** mocks for service and repository dependencies.
+- **FluentAssertions:** readable assertions.
+- **ASP.NET Core `WebApplicationFactory`:** HTTP-level integration tests for authentication, authorization and JWT behavior.
+- **Docker Compose:** local manual integration against SQL Server, ASP.NET Core API and the built React frontend.
+- **TypeScript compiler and Vite:** production frontend build checks.
 
-The backend test project uses:
+The test suite is in `backend/WarehouseOps.Tests`. Local Docker smoke tests are conducted separately from the unit and HTTP test suite.
 
-* xUnit
-* Moq
-* FluentAssertions
+## Run backend tests
 
-## Test project
+From the repository root:
 
-The test project is located at:
-
-backend/WarehouseOps.Tests
-
-Current test files:
-
-* ProductServiceTests.cs
-* InventoryServiceTests.cs
-* OrderServiceTests.cs
-* ShipmentServiceTests.cs
-* IncidentServiceTests.cs
-
-## Running tests
-
-Run all backend tests from the backend folder:
-
+```powershell
 cd backend
-dotnet test
+dotnet restore WarehouseOps.sln
+dotnet build WarehouseOps.sln --no-restore
+dotnet test WarehouseOps.sln
+```
 
-The current backend test suite contains 50 service tests.
+**Verified result (2 November 2026):** `223` total, `223` succeeded, `0` failed, `0` skipped. This result is a snapshot of the current project, not a permanent fixed test count.
 
-## Test focus
+## Run frontend build checks
 
-The tests focus on the Application layer.
+```powershell
+cd frontend/warehouseops-client
+npm install
+npm run build
+```
 
-This is intentional because the Application layer contains the main business rules.
+The latest local frontend build succeeded. The Vite bundler produced a non-blocking warning about a JavaScript chunk exceeding 500 kB. Docker also successfully built the frontend image and ran it using Nginx.
 
-The tests mock repository interfaces with Moq. This makes the tests fast and focused on business behavior instead of database setup.
+## Test categories
 
-## ProductService tests
+### Service-level business tests
 
-Product tests verify product management rules.
+Tests cover:
 
-Covered behavior:
+- **Products:** required fields, trimming, non-negative prices, duplicate SKUs, deletion restrictions, audit records.
+- **Inventory:** product references, non-negative quantities, duplicate inventory records, low-stock mapping, concurrent updates and audit records.
+- **Customers:** creation and update validation, security-relevant field handling and audit behavior.
+- **Orders:** valid customers and order items, duplicate products, available stock, reservations, cancellation restoration, invalid state transitions, audit privacy and transactional behavior.
+- **Shipments:** linked orders, tracking data, uniqueness, invalid shipment states, delivered timestamps and audit records.
+- **Incidents:** required title and description, valid severity/entity type, state transitions, closure requirements, status filtering and audit records.
+- **Transactions:** tests for decorators that coordinate persistence behavior across services.
 
-* Creating a product with valid data works.
-* Product input is trimmed.
-* Missing product name is rejected.
-* Duplicate SKU is rejected.
-* Deleting a missing product returns false.
-* Deleting a product used in inventory or order history is rejected.
-* Deleting a product that is not in use works.
-* Product changes are audit logged.
+Many service-level tests replace repository dependencies with mocks. They verify application rules but do not guarantee the same outcome under every SQL Server concurrency scenario.
 
-Important business rules:
+### HTTP security integration tests
 
-* Product name is required.
-* SKU is required.
-* Category is required.
-* Price cannot be negative.
-* SKU must be unique.
-* Products used in inventory or order history cannot be deleted.
+`Integration/SecurityHttpTests.cs` starts the API with `WebApplicationFactory`, uses test configuration and mocks selected application services, then sends real HTTP requests through middleware, routing and authorization.
 
-## InventoryService tests
+Examples of tested behavior:
 
-Inventory tests verify warehouse stock rules.
+- Anonymous requests to protected endpoints receive `401 Unauthorized`.
+- Missing or incorrect role authorization results in `403 Forbidden`.
+- Admin can create a product, while Manager and WarehouseStaff cannot.
+- WarehouseStaff cannot access audit history.
+- The login endpoint rejects invalid credentials and rate-limits excessive attempts.
+- Service methods are not invoked when middleware denies the request.
 
-Covered behavior:
+These HTTP tests **do not automatically connect to the Docker SQL Server**. Migrations and demo seeding are disabled in their test host.
 
-* Creating an inventory item with valid data works.
-* Missing product id is rejected.
-* Negative quantity is rejected.
-* Missing product is rejected.
-* Duplicate inventory item for the same product is rejected.
-* Updating inventory with valid data works.
-* Updating inventory with negative quantity is rejected.
-* Updating a missing inventory item returns null.
-* Low stock items are mapped correctly.
-* Inventory changes are audit logged.
+### JWT validation tests
 
-Important business rules:
+`Integration/JwtValidationHttpTests.cs` checks that the JWT middleware rejects tokens with:
 
-* Inventory must be connected to a product.
-* Quantity in stock cannot be negative.
-* Minimum stock level cannot be negative.
-* A product can only have one inventory item.
-* Low stock is detected when stock is below minimum level.
+- Incorrect issuer.
+- Incorrect audience.
+- Incorrect signing key.
+- Expired lifetime.
+- A validity window that begins in the future.
+- No digital signature.
+- No required role claim, which produces `403` for an otherwise valid token on a role-protected endpoint.
 
-## OrderService tests
+A correctly signed token with the expected role is accepted by the protected test endpoint.
 
-Order tests verify B2B order handling rules.
+### Identity and authentication tests
 
-Covered behavior:
+- `Integration/IdentityModelTests.cs` confirms that EF Core maps Identity users/roles, uses GUID keys, applies the `DisplayName` length limit and preserves business-entity mappings.
+- `Services/AuthServiceTests.cs` verifies successful JWT issuance after successful authentication, rejection of invalid credentials and rejection of missing email/password input before Identity lookup.
 
-* Creating an order with valid customer, products and inventory works.
-* Creating an order reduces inventory quantity.
-* Missing customer id is rejected.
-* Missing customer is rejected.
-* Adding the same product more than once is rejected.
-* Ordering a product without inventory is rejected.
-* Ordering more than available stock is rejected.
-* Cancelling an order returns items to inventory.
-* Shipped orders cannot be cancelled.
-* Invalid status changes are rejected.
-* Order changes are audit logged.
+Identity password verification and user provisioning were additionally tested through the **real local SQL Server API** using the Docker environment.
 
-Important business rules:
+## Manual full-stack verification
 
-* Orders must have a valid customer.
-* Orders must contain at least one item.
-* The same product cannot be added more than once to the same order.
-* Products must exist in inventory before they can be ordered.
-* Orders cannot reserve more stock than available.
-* Cancelling an order returns items to inventory.
-* Shipped and completed orders cannot be cancelled.
+The following checks were performed with the running local Docker setup:
 
-## ShipmentService tests
+| Check | Expected behavior | Observed result |
+|---|---|---|
+| SQL Server container | Healthy | Passed |
+| API startup and Swagger | API available | Swagger returned `200` |
+| Development Identity seeding | Three roles/users configured | Seed log completed successfully |
+| Admin login | JWT with `Admin` role | Passed |
+| WarehouseStaff login | JWT with `WarehouseStaff` role | Passed |
+| Manager login | JWT with `Manager` role | Passed |
+| Anonymous `GET /api/Products` | `401` | Passed |
+| Invalid JWT for product delete | `401` | Passed |
+| Admin `GET /api/AuditLogs` | `200` | Passed |
+| WarehouseStaff `GET /api/AuditLogs` | `403` | Passed |
+| Manager `GET /api/AuditLogs` | `200` | Passed |
+| Admin deletes nonexistent product | `404` | Passed |
+| WarehouseStaff/Manager delete product | `403` | Passed |
+| React dashboard | Operational figures render | Passed |
+| React role-specific navigation | Audit history hidden from WarehouseStaff | Passed |
+| React logout | Returns to login; can log in again | Passed |
 
-Shipment tests verify delivery handling rules.
+The deliberate delete test used a random nonexistent GUID to avoid modifying products. These results are point-in-time checks, not continuous automated monitoring.
 
-Covered behavior:
+## Important test constraints
 
-* Creating a shipment for a valid order works.
-* Missing order id is rejected.
-* Missing tracking number is rejected.
-* Missing order is rejected.
-* Creating a shipment for a cancelled order is rejected.
-* Creating a second shipment for the same order is rejected.
-* Updating shipment status works.
-* Delivered date is set when status becomes Delivered.
-* Updating a missing shipment returns null.
-* Invalid shipment status is rejected.
-* Delivered shipments cannot be changed.
-* Shipment changes are audit logged.
-
-Important business rules:
-
-* A shipment must be connected to an order.
-* Cancelled orders cannot receive shipments.
-* An order can only have one shipment.
-* Delivered and cancelled shipments cannot be changed.
-
-## IncidentService tests
-
-Incident tests verify operational incident rules.
-
-Covered behavior:
-
-* Creating an incident with valid data works.
-* Missing title is rejected.
-* Missing description is rejected.
-* Invalid severity is rejected.
-* Invalid related entity type is rejected.
-* Updating incident status works.
-* Closed date is set when status becomes Closed.
-* Updating a missing incident returns null.
-* Invalid incident status is rejected.
-* Closed incidents cannot be reopened.
-* Resolving an incident with resolution notes works.
-* Resolving without notes is rejected.
-* Resolving a missing incident returns null.
-* Resolving an already closed incident is rejected.
-* Filtering incidents by status works.
-* Incident changes are audit logged.
-
-Important business rules:
-
-* Title is required.
-* Description is required.
-* Severity must be valid.
-* Related entity type must be valid.
-* Closed incidents cannot be reopened.
-* Resolution notes are required when closing an incident.
-
-## What is not tested yet
-
-The current test suite is focused on service level business rules.
-
-The following areas can be improved later:
-
-* Controller integration tests
-* Authorization integration tests
-* Database integration tests with SQL Server or Testcontainers
-* Frontend component tests
-* End to end tests
-* Docker build validation in CI
-
-## Why service tests were chosen first
-
-Service tests were chosen first because they give the highest value for the current project stage.
-
-They verify the rules that matter most:
-
-* Products cannot be deleted when they are in use.
-* Inventory cannot become negative.
-* Orders cannot reserve unavailable stock.
-* Cancelling orders returns stock.
-* Shipments follow valid business rules.
-* Incidents cannot be closed incorrectly.
-
-These tests are fast, readable and easy to run in GitHub Actions.
+- A successful mock-based HTTP integration test verifies middleware and API behavior but not the real database's query performance, constraints or concurrency.
+- The Identity lockout threshold has been configured but has not yet undergone a dedicated real-database security regression test.
+- SQL Injection testing with adversarial payloads has been planned but not yet executed. EF Core's use of parameterized queries reduces risk; this does not by itself prove complete protection.
+- No comprehensive browser end-to-end test suite is currently automated.
+- React UI screenshots document visual state, not exhaustive functional correctness.
 
 ## GitHub Actions
 
-GitHub Actions runs tests automatically.
+`.github/workflows/ci.yml` runs on push and pull requests to `main`. The current workflow:
 
-The CI workflow runs on push and pull request to main.
+1. Restores .NET packages.
+2. Builds the backend.
+3. Executes backend tests.
+4. Installs frontend dependencies.
+5. Builds the frontend.
 
-The workflow checks:
+The workflow does **not** currently run a real SQL Server service, penetration tests or Docker image-build validations.
 
-* Backend restore
-* Backend build
-* Backend tests
-* Frontend dependency installation
-* Frontend build
+## Next testing work
 
-Workflow file:
+1. Verify Identity account lockout and release using an isolated test identity.
+2. Add SQL Injection and unsafe input regression checks to appropriate API routes.
+3. Add object-level access and mass-assignment tests.
+4. Add tests checking that database exceptions and technical details are not returned to clients.
+5. Add database-backed integration tests for migrations, relationships and concurrent order/inventory updates.
+6. Add automated frontend component and end-to-end tests if scope permits.
 
-.github/workflows/ci.yml
-
-## Test result goal
-
-The expected result is:
-
-failed: 0
-
-All tests should pass before code is committed or pushed.
-
-## Current status
-
-| Test area | Status |
-|---|---|
-| ProductService | Implemented |
-| InventoryService | Implemented |
-| OrderService | Implemented |
-| ShipmentService | Implemented |
-| IncidentService | Implemented |
-| Controller tests | Planned improvement |
-| Authorization integration tests | Planned improvement |
-| Frontend tests | Planned improvement |
-| End to end tests | Planned improvement |
+Test results and remaining limitations should be updated after each substantial security or feature milestone.
