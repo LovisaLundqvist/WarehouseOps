@@ -12,21 +12,9 @@ const loginSchema = z.object({
 type LoginFormValues = z.infer<typeof loginSchema>;
 
 const demoAccounts = [
-  {
-    role: "Admin",
-    email: "admin@warehouseops.local",
-    password: "Admin123!",
-  },
-  {
-    role: "Warehouse staff",
-    email: "staff@warehouseops.local",
-    password: "Staff123!",
-  },
-  {
-    role: "Manager",
-    email: "manager@warehouseops.local",
-    password: "Manager123!",
-  },
+  { role: "Admin", email: "admin@warehouseops.local" },
+  { role: "Warehouse staff", email: "staff@warehouseops.local" },
+  { role: "Manager", email: "manager@warehouseops.local" },
 ];
 
 export default function LoginPage() {
@@ -35,7 +23,7 @@ export default function LoginPage() {
 
   const [formValues, setFormValues] = useState<LoginFormValues>({
     email: "admin@warehouseops.local",
-    password: "Admin123!",
+    password: "",
   });
   const [validationErrors, setValidationErrors] = useState<Record<string, string>>({});
   const [errorMessage, setErrorMessage] = useState("");
@@ -49,8 +37,8 @@ export default function LoginPage() {
     setFormValues((current) => ({ ...current, [field]: value }));
   }
 
-  function selectDemoAccount(email: string, password: string) {
-    setFormValues({ email, password });
+  function selectDemoAccount(email: string) {
+    setFormValues({ email, password: "" });
     setValidationErrors({});
     setErrorMessage("");
   }
@@ -173,13 +161,14 @@ export default function LoginPage() {
             <h3 className="ops-demo__title" id="demo-account-heading">
               Local demonstration accounts
             </h3>
+            <p>Passwords are configured locally and are not included in the frontend.</p>
             {demoAccounts.map((account) => (
               <button
                 className="ops-demo__row"
                 type="button"
                 key={account.email}
-                onClick={() => selectDemoAccount(account.email, account.password)}
-                aria-label={`Fill in demo credentials for ${account.role}`}
+                onClick={() => selectDemoAccount(account.email)}
+                aria-label={`Fill in demo email for ${account.role}`}
               >
                 <span className="ops-demo__role">{account.role}</span>
                 <span className="ops-demo__email">{account.email}</span>

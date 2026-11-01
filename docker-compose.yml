@@ -29,6 +29,10 @@ services:
       Jwt__ExpirationMinutes: "120"
       Database__AutoMigrate: "true"
       Database__SeedDemoData: "true"
+      Database__SeedDemoUsers: "true"
+      DemoUsers__AdminPassword: ${DEMO_ADMIN_PASSWORD:?Set DEMO_ADMIN_PASSWORD in .env}
+      DemoUsers__WarehouseStaffPassword: ${DEMO_STAFF_PASSWORD:?Set DEMO_STAFF_PASSWORD in .env}
+      DemoUsers__ManagerPassword: ${DEMO_MANAGER_PASSWORD:?Set DEMO_MANAGER_PASSWORD in .env}
     ports:
       - "127.0.0.1:5059:8080"
     depends_on:

@@ -1,6 +1,7 @@
 using System.Text;
 using System.Threading.RateLimiting;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.AspNetCore.Identity;
 using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
@@ -10,6 +11,7 @@ using WarehouseOps.Api.Services;
 using WarehouseOps.Application.Interfaces;
 using WarehouseOps.Application.Services;
 using WarehouseOps.Infrastructure;
+using WarehouseOps.Infrastructure.Identity;
 using WarehouseOps.Infrastructure.Repositories;
 using WarehouseOps.Infrastructure.Services;
 
@@ -18,7 +20,6 @@ var builder = WebApplication.CreateBuilder(args);
 const string frontendCorsPolicy = "WarehouseOpsFrontend";
 
 builder.Services.AddControllers();
-
 builder.Services.AddEndpointsApiExplorer();
 
 builder.Services.AddSwaggerGen(options =>
@@ -47,15 +48,13 @@ builder.Services.AddCors(options =>
     options.AddPolicy(frontendCorsPolicy, policy =>
     {
         policy
-            .WithOrigins(
-                "http://localhost:5173",
-                "http://localhost:3000")
+            .WithOrigins("http://localhost:5173", "http://localhost:3000")
             .AllowAnyHeader()
             .AllowAnyMethod();
     });
 });
 
-// Five login attempts per minute and client IP. No waiting queue is permitted.
+// Limit login attempts per minute and client IP. No waiting queue.
 builder.Services.AddRateLimiter(options =>
 {
     options.AddPolicy("login", context =>
@@ -82,11 +81,29 @@ builder.Services.AddRateLimiter(options =>
 });
 
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
-    options.UseSqlServer(
-        builder.Configuration.GetConnectionString("DefaultConnection")));
+    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Identity owns user storage, password hashing, roles and account lockout.
+// JWT bearer remains the sole authentication scheme for protected API endpoints.
+builder.Services
+    .AddIdentityCore<ApplicationUser>(options =>
+    {
+        options.User.RequireUniqueEmail = true;
+        options.SignIn.RequireConfirmedEmail = true;
+        options.Password.RequiredLength = 12;
+        options.Password.RequireDigit = true;
+        options.Password.RequireLowercase = true;
+        options.Password.RequireUppercase = true;
+        options.Password.RequireNonAlphanumeric = true;
+        options.Lockout.DefaultLockoutTimeSpan = TimeSpan.FromMinutes(15);
+        options.Lockout.MaxFailedAccessAttempts = 5;
+        options.Lockout.AllowedForNewUsers = true;
+    })
+    .AddRoles<IdentityRole<Guid>>()
+    .AddEntityFrameworkStores<ApplicationDbContext>()
+    .AddSignInManager();
 
 var jwtSecretKey = builder.Configuration["Jwt:SecretKey"];
-
 if (string.IsNullOrWhiteSpace(jwtSecretKey) || jwtSecretKey.Length < 32)
 {
     throw new InvalidOperationException("JWT secret key is missing or too short.");
@@ -101,7 +118,6 @@ builder.Services
     {
         options.RequireHttpsMetadata = false;
         options.SaveToken = false;
-
         options.TokenValidationParameters = new TokenValidationParameters
         {
             ValidateIssuer = true,
@@ -116,15 +132,14 @@ builder.Services
     });
 
 builder.Services.AddAuthorization();
-
 builder.Services.AddHttpContextAccessor();
 
 builder.Services.AddScoped<ICurrentUserService, CurrentUserService>();
 builder.Services.AddScoped<ITransactionExecutor, EfTransactionExecutor>();
 
+builder.Services.AddScoped<IAuthUserAuthenticator, IdentityAuthUserAuthenticator>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<IJwtTokenService, JwtTokenService>();
-builder.Services.AddScoped<IPasswordHashingService, PasswordHashingService>();
 
 // Business rules stay in the inner services. Decorators handle transactions.
 builder.Services.AddScoped<ProductService>();
@@ -176,7 +191,6 @@ builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IDashboardRepository, DashboardRepository>();
 
 var app = builder.Build();
-
 app.UseMiddleware<GlobalExceptionHandlingMiddleware>();
 
 if (app.Configuration.GetValue<bool>("Database:AutoMigrate"))
@@ -189,37 +203,35 @@ if (app.Configuration.GetValue<bool>("Database:SeedDemoData"))
     await SeedDemoDataAsync(app);
 }
 
+// Demo identities are never automatically provisioned outside Development.
+if (app.Environment.IsDevelopment() &&
+    app.Configuration.GetValue<bool>("Database:SeedDemoUsers"))
+{
+    using var scope = app.Services.CreateScope();
+    await DemoIdentitySeeder.SeedAsync(scope.ServiceProvider, app.Configuration);
+    app.Logger.LogInformation("Development demo Identity users were checked successfully.");
+}
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
-
     app.UseSwaggerUI();
 }
 
 app.UseHttpsRedirection();
-
 app.UseRouting();
-
 app.UseCors(frontendCorsPolicy);
-
-// Endpoint-specific rate limiting must run after routing.
 app.UseRateLimiter();
-
 app.UseAuthentication();
-
 app.UseAuthorization();
-
 app.MapControllers();
-
 app.Run();
 
 static async Task ApplyDatabaseMigrationsAsync(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
-
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
     const int maxAttempts = 10;
 
     for (var attempt = 1; attempt <= maxAttempts; attempt++)
@@ -227,9 +239,7 @@ static async Task ApplyDatabaseMigrationsAsync(WebApplication app)
         try
         {
             await dbContext.Database.MigrateAsync();
-
             logger.LogInformation("Database migrations were applied successfully.");
-
             return;
         }
         catch (Exception exception) when (attempt < maxAttempts)
@@ -239,7 +249,6 @@ static async Task ApplyDatabaseMigrationsAsync(WebApplication app)
                 "Database migration attempt {Attempt} of {MaxAttempts} failed. Retrying in 5 seconds.",
                 attempt,
                 maxAttempts);
-
             await Task.Delay(TimeSpan.FromSeconds(5));
         }
     }
@@ -250,14 +259,10 @@ static async Task ApplyDatabaseMigrationsAsync(WebApplication app)
 static async Task SeedDemoDataAsync(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
-
     var logger = scope.ServiceProvider.GetRequiredService<ILogger<Program>>();
     var dbContext = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
-
     await DatabaseSeeder.SeedDemoDataAsync(dbContext);
-
     logger.LogInformation("Demo seed data was checked successfully.");
 }
 
-// Expose the web entry point to WebApplicationFactory integration tests.
 public partial class Program { }
