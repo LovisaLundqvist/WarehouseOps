@@ -46,6 +46,9 @@ public class SecurityHttpTests
         });
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        factory.ProductServiceMock.Verify(
+            service => service.CreateAsync(It.IsAny<CreateProductRequest>()),
+            Times.Never);
     }
 
     [Fact]
@@ -58,6 +61,9 @@ public class SecurityHttpTests
         using var response = await client.GetAsync("/api/AuditLogs");
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        factory.AuditLogServiceMock.Verify(
+            service => service.GetAllAsync(),
+            Times.Never);
     }
 
     [Fact]
@@ -143,6 +149,163 @@ public class SecurityHttpTests
         body.Should().Contain("Too many login attempts");
     }
 
+    // These endpoints must not disclose data without authentication.
+    [Theory]
+    [InlineData("/api/Customers")]
+    [InlineData("/api/Inventory")]
+    [InlineData("/api/Orders")]
+    [InlineData("/api/Shipments")]
+    [InlineData("/api/Incidents")]
+    [InlineData("/api/Dashboard/summary")]
+    [InlineData("/api/AuditLogs")]
+    public async Task AnonymousRequestsToOtherProtectedEndpoints_Return401(string path)
+    {
+        using var factory = new SecurityTestFactory();
+        using var client = CreateClient(factory);
+
+        using var response = await client.GetAsync(path);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+    }
+
+    // Manager is read-only for operational records, even with a valid JWT.
+    [Theory]
+    [InlineData("POST", "/api/Products")]
+    [InlineData("PUT", "/api/Products/11111111-1111-1111-1111-111111111111")]
+    [InlineData("DELETE", "/api/Products/11111111-1111-1111-1111-111111111111")]
+    [InlineData("POST", "/api/Customers")]
+    [InlineData("POST", "/api/Inventory")]
+    [InlineData("POST", "/api/Orders")]
+    [InlineData("PUT", "/api/Orders/11111111-1111-1111-1111-111111111111/status")]
+    [InlineData("POST", "/api/Shipments")]
+    [InlineData("PUT", "/api/Shipments/11111111-1111-1111-1111-111111111111/status")]
+    [InlineData("POST", "/api/Incidents")]
+    [InlineData("PUT", "/api/Incidents/11111111-1111-1111-1111-111111111111/resolve")]
+    public async Task ManagerCannotModifyOperationalData_Return403(string method, string path)
+    {
+        using var factory = new SecurityTestFactory();
+        using var client = CreateClient(factory);
+        SetRoleToken(client, factory, UserRole.Manager);
+
+        using var request = new HttpRequestMessage(new HttpMethod(method), path);
+        if (method is "POST" or "PUT")
+        {
+            // The authorization middleware must reject the request before model binding.
+            request.Content = JsonContent.Create(new { Value = "security-test" });
+        }
+
+        using var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    // WarehouseStaff is authorized to work with inventory, not the product catalog.
+    [Theory]
+    [InlineData("POST", "/api/Products")]
+    [InlineData("PUT", "/api/Products/11111111-1111-1111-1111-111111111111")]
+    [InlineData("DELETE", "/api/Products/11111111-1111-1111-1111-111111111111")]
+    public async Task WarehouseStaffCannotModifyProducts_Return403(string method, string path)
+    {
+        using var factory = new SecurityTestFactory();
+        using var client = CreateClient(factory);
+        SetRoleToken(client, factory, UserRole.WarehouseStaff);
+
+        using var request = new HttpRequestMessage(new HttpMethod(method), path);
+        if (method is "POST" or "PUT")
+        {
+            request.Content = JsonContent.Create(new { Value = "security-test" });
+        }
+
+        using var response = await client.SendAsync(request);
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+    }
+
+    [Fact]
+    public async Task WarehouseStaffCannotReadAuditLogById_Returns403()
+    {
+        using var factory = new SecurityTestFactory();
+        using var client = CreateClient(factory);
+        SetRoleToken(client, factory, UserRole.WarehouseStaff);
+
+        using var response = await client.GetAsync(
+            $"/api/AuditLogs/{Guid.NewGuid()}");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
+        factory.AuditLogServiceMock.Verify(
+            service => service.GetByIdAsync(It.IsAny<Guid>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task ManagerCanReadAuditLogs_Returns200()
+    {
+        using var factory = new SecurityTestFactory();
+        using var client = CreateClient(factory);
+        SetRoleToken(client, factory, UserRole.Manager);
+
+        using var response = await client.GetAsync("/api/AuditLogs");
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        factory.AuditLogServiceMock.Verify(
+            service => service.GetAllAsync(),
+            Times.Once);
+    }
+
+    [Fact]
+    public async Task InvalidBearerToken_Returns401()
+    {
+        using var factory = new SecurityTestFactory();
+        using var client = CreateClient(factory);
+        client.DefaultRequestHeaders.Authorization =
+            new AuthenticationHeaderValue("Bearer", "this-is-not-a-valid-jwt");
+
+        using var response = await client.GetAsync("/api/Products");
+
+        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
+        factory.ProductServiceMock.Verify(
+            service => service.GetAllAsync(It.IsAny<string?>(), It.IsAny<string?>()),
+            Times.Never);
+    }
+
+    [Fact]
+    public async Task AdminCanCreateProduct_Returns201AndCallsServiceOnce()
+    {
+        using var factory = new SecurityTestFactory();
+        var productId = Guid.NewGuid();
+        factory.ProductServiceMock
+            .Setup(service => service.CreateAsync(It.IsAny<CreateProductRequest>()))
+            .ReturnsAsync(new ProductDto
+            {
+                Id = productId,
+                Name = "Test product",
+                Sku = "SECURITY-TEST-001",
+                Category = "Test",
+                Price = 10m,
+                CreatedAt = DateTime.UtcNow
+            });
+
+        using var client = CreateClient(factory);
+        SetRoleToken(client, factory, UserRole.Admin);
+
+        using var response = await client.PostAsJsonAsync("/api/Products", new
+        {
+            Name = "Test product",
+            Sku = "SECURITY-TEST-001",
+            Category = "Test",
+            Description = "Authorization integration test",
+            Price = 10m
+        });
+
+        response.StatusCode.Should().Be(HttpStatusCode.Created);
+        var created = await response.Content.ReadFromJsonAsync<ProductDto>();
+        created.Should().NotBeNull();
+        created!.Id.Should().Be(productId);
+        factory.ProductServiceMock.Verify(
+            service => service.CreateAsync(It.IsAny<CreateProductRequest>()),
+            Times.Once);
+    }
+
     private static HttpClient CreateClient(SecurityTestFactory factory)
     {
         return factory.CreateClient(new WebApplicationFactoryClientOptions
@@ -179,6 +342,9 @@ public class SecurityHttpTests
             ["Database:SeedDemoData"] = "false"
         };
 
+        public Mock<IProductService> ProductServiceMock { get; } = new();
+        public Mock<IAuditLogService> AuditLogServiceMock { get; } = new();
+
         protected override IHost CreateHost(IHostBuilder builder)
         {
             // Program.cs reads Jwt:SecretKey before WebApplicationBuilder.Build().
@@ -200,20 +366,18 @@ public class SecurityHttpTests
 
             builder.ConfigureTestServices(services =>
             {
-                var products = new Mock<IProductService>();
-                products.Setup(service => service.GetAllAsync(
+                ProductServiceMock.Setup(service => service.GetAllAsync(
                         It.IsAny<string?>(), It.IsAny<string?>()))
                     .ReturnsAsync(new List<ProductDto>());
 
                 services.RemoveAll<IProductService>();
-                services.AddSingleton(products.Object);
+                services.AddSingleton(ProductServiceMock.Object);
 
-                var auditLogs = new Mock<IAuditLogService>();
-                auditLogs.Setup(service => service.GetAllAsync())
+                AuditLogServiceMock.Setup(service => service.GetAllAsync())
                     .ReturnsAsync(new List<AuditLogDto>());
 
                 services.RemoveAll<IAuditLogService>();
-                services.AddSingleton(auditLogs.Object);
+                services.AddSingleton(AuditLogServiceMock.Object);
             });
         }
     }
