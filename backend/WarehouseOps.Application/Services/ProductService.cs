@@ -38,6 +38,7 @@ public class ProductService : IProductService
 
     public async Task<ProductDto> CreateAsync(CreateProductRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request);
         ValidateRequest(request.Name, request.Sku, request.Category, request.Price);
 
         var skuExists = await _productRepository.SkuExistsAsync(request.Sku.Trim());
@@ -53,7 +54,7 @@ public class ProductService : IProductService
             Name = request.Name.Trim(),
             Sku = request.Sku.Trim(),
             Category = request.Category.Trim(),
-            Description = request.Description.Trim(),
+            Description = request.Description?.Trim() ?? string.Empty,
             Price = request.Price,
             CreatedAt = DateTime.UtcNow
         };
@@ -73,6 +74,7 @@ public class ProductService : IProductService
 
     public async Task<ProductDto?> UpdateAsync(Guid id, UpdateProductRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request);
         ValidateRequest(request.Name, request.Sku, request.Category, request.Price);
 
         var product = await _productRepository.GetByIdAsync(id);
@@ -97,7 +99,7 @@ public class ProductService : IProductService
         product.Name = request.Name.Trim();
         product.Sku = request.Sku.Trim();
         product.Category = request.Category.Trim();
-        product.Description = request.Description.Trim();
+        product.Description = request.Description?.Trim() ?? string.Empty;
         product.Price = request.Price;
         product.UpdatedAt = DateTime.UtcNow;
 
@@ -144,7 +146,7 @@ public class ProductService : IProductService
         return true;
     }
 
-    private static void ValidateRequest(string name, string sku, string category, decimal price)
+    private static void ValidateRequest(string? name, string? sku, string? category, decimal price)
     {
         if (string.IsNullOrWhiteSpace(name))
         {
@@ -156,6 +158,11 @@ public class ProductService : IProductService
             throw new ArgumentException("SKU is required.");
         }
 
+        if (sku.Trim().Length > 100)
+        {
+            throw new ArgumentException("SKU cannot be longer than 100 characters.");
+        }
+
         if (string.IsNullOrWhiteSpace(category))
         {
             throw new ArgumentException("Category is required.");
@@ -164,6 +171,16 @@ public class ProductService : IProductService
         if (price < 0)
         {
             throw new ArgumentException("Price cannot be negative.");
+        }
+
+        if (price > 9999999999999999.99m)
+        {
+            throw new ArgumentException("Price exceeds the maximum allowed value.");
+        }
+
+        if (decimal.Round(price, 2) != price)
+        {
+            throw new ArgumentException("Price cannot have more than two decimal places.");
         }
     }
 
