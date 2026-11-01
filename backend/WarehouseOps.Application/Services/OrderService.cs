@@ -7,6 +7,8 @@ namespace WarehouseOps.Application.Services;
 
 public class OrderService : IOrderService
 {
+    private const decimal MaximumOrderAmount = 9999999999999999.99m;
+
     private readonly IOrderRepository _orderRepository;
     private readonly IAuditLogService _auditLogService;
 
@@ -59,13 +61,9 @@ public class OrderService : IOrderService
             throw new ArgumentException("An order cannot contain the same product more than once.");
         }
 
-        var order = new Order
-        {
-            Id = Guid.NewGuid(),
-            CustomerId = request.CustomerId,
-            Status = OrderStatus.Pending,
-            CreatedAt = DateTime.UtcNow
-        };
+        // Validate every order line before changing any tracked inventory balances.
+        var validatedLines = new List<(Product Product, InventoryItem Inventory, int Quantity)>();
+        decimal totalAmount = 0;
 
         foreach (var requestItem in request.Items)
         {
@@ -88,26 +86,49 @@ public class OrderService : IOrderService
                 throw new InvalidOperationException($"Not enough stock for product {product.Name}.");
             }
 
-            inventoryItem.QuantityInStock -= requestItem.Quantity;
-            inventoryItem.UpdatedAt = DateTime.UtcNow;
+            if (product.Price < 0 ||
+                product.Price > MaximumOrderAmount / requestItem.Quantity)
+            {
+                throw new ArgumentException("Order total exceeds the maximum allowed value.");
+            }
 
-            var orderItem = new OrderItem
+            var lineTotal = product.Price * requestItem.Quantity;
+
+            if (totalAmount > MaximumOrderAmount - lineTotal)
+            {
+                throw new ArgumentException("Order total exceeds the maximum allowed value.");
+            }
+
+            totalAmount += lineTotal;
+            validatedLines.Add((product, inventoryItem, requestItem.Quantity));
+        }
+
+        var order = new Order
+        {
+            Id = Guid.NewGuid(),
+            CustomerId = request.CustomerId,
+            Status = OrderStatus.Pending,
+            TotalAmount = totalAmount,
+            CreatedAt = DateTime.UtcNow
+        };
+
+        foreach (var line in validatedLines)
+        {
+            line.Inventory.QuantityInStock -= line.Quantity;
+            line.Inventory.UpdatedAt = DateTime.UtcNow;
+
+            order.OrderItems.Add(new OrderItem
             {
                 Id = Guid.NewGuid(),
                 OrderId = order.Id,
-                ProductId = product.Id,
-                Quantity = requestItem.Quantity,
-                UnitPrice = product.Price,
+                ProductId = line.Product.Id,
+                Quantity = line.Quantity,
+                UnitPrice = line.Product.Price,
                 CreatedAt = DateTime.UtcNow
-            };
-
-            order.OrderItems.Add(orderItem);
+            });
         }
 
-        order.TotalAmount = order.OrderItems.Sum(orderItem => orderItem.Quantity * orderItem.UnitPrice);
-
         await _orderRepository.AddAsync(order);
-
         await _orderRepository.SaveChangesAsync();
 
         var createdOrder = await _orderRepository.GetByIdAsync(order.Id);
@@ -128,6 +149,7 @@ public class OrderService : IOrderService
 
     public async Task<OrderDto?> UpdateStatusAsync(Guid id, UpdateOrderStatusRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request);
         var newStatus = ParseStatus(request.Status);
 
         var order = await _orderRepository.GetByIdAsync(id);
@@ -204,18 +226,25 @@ public class OrderService : IOrderService
 
     private static void ValidateCreateRequest(CreateOrderRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
         if (request.CustomerId == Guid.Empty)
         {
             throw new ArgumentException("Customer id is required.");
         }
 
-        if (request.Items is null || !request.Items.Any())
+        if (request.Items is null || request.Items.Count == 0)
         {
             throw new ArgumentException("An order must contain at least one order item.");
         }
 
         foreach (var item in request.Items)
         {
+            if (item is null)
+            {
+                throw new ArgumentException("Order items cannot be null.");
+            }
+
             if (item.ProductId == Guid.Empty)
             {
                 throw new ArgumentException("Product id is required.");
