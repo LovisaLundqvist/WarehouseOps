@@ -1,9 +1,13 @@
+using Microsoft.AspNetCore.Identity;
+using Microsoft.AspNetCore.Identity.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore;
 using WarehouseOps.Domain;
+using WarehouseOps.Infrastructure.Identity;
 
 namespace WarehouseOps.Infrastructure;
 
-public class ApplicationDbContext : DbContext
+public class ApplicationDbContext
+    : IdentityDbContext<ApplicationUser, IdentityRole<Guid>, Guid>
 {
     public ApplicationDbContext(DbContextOptions<ApplicationDbContext> options)
         : base(options)
@@ -28,7 +32,13 @@ public class ApplicationDbContext : DbContext
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
+        // Identity maps its user, role, claim, token and login tables here.
         base.OnModelCreating(modelBuilder);
+
+        modelBuilder.Entity<ApplicationUser>()
+            .Property(user => user.DisplayName)
+            .HasMaxLength(200)
+            .IsRequired();
 
         modelBuilder.Entity<Product>()
             .Property(product => product.Price)
