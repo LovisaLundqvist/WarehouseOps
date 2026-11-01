@@ -67,7 +67,7 @@ public class ProductService : IProductService
             "Product",
             "Created",
             "System",
-            $"Created product {product.Name} with SKU {product.Sku}.");
+            $"Created product {product.Id}.");
 
         return MapToDto(product);
     }
@@ -91,15 +91,24 @@ public class ProductService : IProductService
             throw new InvalidOperationException("A product with this SKU already exists.");
         }
 
-        var oldName = product.Name;
-        var oldSku = product.Sku;
-        var oldCategory = product.Category;
-        var oldPrice = product.Price;
+        var name = request.Name.Trim();
+        var sku = request.Sku.Trim();
+        var category = request.Category.Trim();
+        var description = request.Description?.Trim() ?? string.Empty;
 
-        product.Name = request.Name.Trim();
-        product.Sku = request.Sku.Trim();
-        product.Category = request.Category.Trim();
-        product.Description = request.Description?.Trim() ?? string.Empty;
+        // Store field names, not user-provided values, in the audit trail.
+        var changedFields = new List<string>();
+
+        if (product.Name != name) changedFields.Add("Name");
+        if (product.Sku != sku) changedFields.Add("Sku");
+        if (product.Category != category) changedFields.Add("Category");
+        if (product.Description != description) changedFields.Add("Description");
+        if (product.Price != request.Price) changedFields.Add("Price");
+
+        product.Name = name;
+        product.Sku = sku;
+        product.Category = category;
+        product.Description = description;
         product.Price = request.Price;
         product.UpdatedAt = DateTime.UtcNow;
 
@@ -109,7 +118,7 @@ public class ProductService : IProductService
             "Product",
             "Updated",
             "System",
-            $"Updated product {product.Id}. Old values: Name={oldName}, SKU={oldSku}, Category={oldCategory}, Price={oldPrice}. New values: Name={product.Name}, SKU={product.Sku}, Category={product.Category}, Price={product.Price}.");
+            $"Updated product {product.Id}. Changed fields: {(changedFields.Count == 0 ? "None" : string.Join(", ", changedFields))}.");
 
         return MapToDto(product);
     }
@@ -130,9 +139,6 @@ public class ProductService : IProductService
             throw new InvalidOperationException("This product cannot be deleted because it is used in inventory or order history.");
         }
 
-        var productName = product.Name;
-        var productSku = product.Sku;
-
         _productRepository.Delete(product);
 
         await _productRepository.SaveChangesAsync();
@@ -141,7 +147,7 @@ public class ProductService : IProductService
             "Product",
             "Deleted",
             "System",
-            $"Deleted product {productName} with SKU {productSku}.");
+            $"Deleted product {product.Id}.");
 
         return true;
     }
