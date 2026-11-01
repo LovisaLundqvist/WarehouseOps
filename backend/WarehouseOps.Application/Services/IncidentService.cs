@@ -55,7 +55,7 @@ public class IncidentService : IIncidentService
             Description = request.Description.Trim(),
             Severity = ParseSeverity(request.Severity),
             RelatedEntityType = ParseRelatedEntityType(request.RelatedEntityType),
-            RelatedEntityId = request.RelatedEntityId.Trim(),
+            RelatedEntityId = request.RelatedEntityId?.Trim() ?? string.Empty,
             Status = IncidentStatus.Open,
             CreatedAt = DateTime.UtcNow
         };
@@ -75,6 +75,7 @@ public class IncidentService : IIncidentService
 
     public async Task<IncidentDto?> UpdateStatusAsync(Guid id, UpdateIncidentStatusRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request);
         var newStatus = ParseStatus(request.Status);
 
         var incident = await _incidentRepository.GetByIdAsync(id);
@@ -148,9 +149,16 @@ public class IncidentService : IIncidentService
 
     private static void ValidateCreateRequest(CreateIncidentRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
         if (string.IsNullOrWhiteSpace(request.Title))
         {
             throw new ArgumentException("Incident title is required.");
+        }
+
+        if (request.Title.Trim().Length > 200)
+        {
+            throw new ArgumentException("Incident title cannot be longer than 200 characters.");
         }
 
         if (string.IsNullOrWhiteSpace(request.Description))
@@ -158,7 +166,12 @@ public class IncidentService : IIncidentService
             throw new ArgumentException("Incident description is required.");
         }
 
-        if (request.RelatedEntityId.Length > 100)
+        if (request.Description.Trim().Length > 4000)
+        {
+            throw new ArgumentException("Incident description cannot be longer than 4000 characters.");
+        }
+
+        if ((request.RelatedEntityId?.Trim().Length ?? 0) > 100)
         {
             throw new ArgumentException("Related entity id cannot be longer than 100 characters.");
         }
@@ -166,9 +179,16 @@ public class IncidentService : IIncidentService
 
     private static void ValidateResolveRequest(ResolveIncidentRequest request)
     {
+        ArgumentNullException.ThrowIfNull(request);
+
         if (string.IsNullOrWhiteSpace(request.ResolutionNotes))
         {
             throw new ArgumentException("Resolution notes are required.");
+        }
+
+        if (request.ResolutionNotes.Trim().Length > 4000)
+        {
+            throw new ArgumentException("Resolution notes cannot be longer than 4000 characters.");
         }
     }
 
