@@ -99,7 +99,9 @@ public class ShipmentServiceTests
                 "System",
                 It.Is<string>(changes =>
                     changes.Contains("Created shipment") &&
-                    changes.Contains("WH-TRK-1001"))),
+                    changes.Contains(shipmentId.ToString()) &&
+                    changes.Contains(orderId.ToString()) &&
+                    !changes.Contains("WH-TRK-1001"))),
             Times.Once);
     }
 
@@ -434,6 +436,68 @@ public class ShipmentServiceTests
         _shipmentRepositoryMock.Verify(
             repository => repository.SaveChangesAsync(),
             Times.Never);
+    }
+
+    [Theory]
+    [InlineData("TRACKING-CONFIDENTIAL-123")]
+    [InlineData("REF-secret@example.com")]
+    public async Task CreateAsync_ShouldNotCopyUserSuppliedTrackingDataIntoAuditLog(string trackingNumber)
+    {
+        var shipmentId = Guid.NewGuid();
+        var orderId = Guid.NewGuid();
+        var order = CreateOrder(orderId, OrderStatus.Packed);
+        Shipment? createdShipment = null;
+
+        _shipmentRepositoryMock
+            .Setup(repository => repository.GetOrderByIdAsync(orderId))
+            .ReturnsAsync(order);
+
+        _shipmentRepositoryMock
+            .Setup(repository => repository.ShipmentExistsForOrderAsync(orderId))
+            .ReturnsAsync(false);
+
+        _shipmentRepositoryMock
+            .Setup(repository => repository.AddAsync(It.IsAny<Shipment>()))
+            .Callback<Shipment>(shipment =>
+            {
+                shipment.Id = shipmentId;
+                shipment.Order = order;
+                createdShipment = shipment;
+            })
+            .Returns(Task.CompletedTask);
+
+        _shipmentRepositoryMock
+            .Setup(repository => repository.SaveChangesAsync())
+            .Returns(Task.CompletedTask);
+
+        _shipmentRepositoryMock
+            .Setup(repository => repository.GetByIdAsync(shipmentId))
+            .ReturnsAsync(() => createdShipment);
+
+        _auditLogServiceMock
+            .Setup(service => service.LogAsync(
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>(),
+                It.IsAny<string>()))
+            .Returns(Task.CompletedTask);
+
+        var result = await _shipmentService.CreateAsync(new CreateShipmentRequest
+        {
+            OrderId = orderId,
+            TrackingNumber = trackingNumber
+        });
+
+        result.TrackingNumber.Should().Be(trackingNumber);
+        result.CustomerName.Should().Be("Nordic Retail AB");
+
+        _auditLogServiceMock.Verify(
+            service => service.LogAsync(
+                "Shipment",
+                "Created",
+                "System",
+                $"Created shipment {shipmentId} for order {orderId}."),
+            Times.Once);
     }
 
     private static Order CreateOrder(Guid orderId, OrderStatus status)

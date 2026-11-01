@@ -84,7 +84,7 @@ public class ShipmentService : IShipmentService
             "Shipment",
             "Created",
             "System",
-            $"Created shipment {createdShipment.Id} for order {createdShipment.OrderId} with tracking number {createdShipment.TrackingNumber}.");
+            $"Created shipment {createdShipment.Id} for order {createdShipment.OrderId}.");
 
         return MapToDto(createdShipment);
     }
