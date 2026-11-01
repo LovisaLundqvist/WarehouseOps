@@ -68,7 +68,7 @@ public class IncidentService : IIncidentService
             "Incident",
             "Created",
             "System",
-            $"Created incident {incident.Id}. Title={incident.Title}, Severity={incident.Severity}, RelatedEntityType={incident.RelatedEntityType}, RelatedEntityId={incident.RelatedEntityId}.");
+            $"Created incident {incident.Id}. Severity={incident.Severity}, RelatedEntityType={incident.RelatedEntityType}.");
 
         return MapToDto(incident);
     }
@@ -142,7 +142,7 @@ public class IncidentService : IIncidentService
             "Incident",
             "Closed",
             "System",
-            $"Closed incident {incident.Id}. Old status={oldStatus}. Resolution notes={incident.ResolutionNotes}.");
+            $"Closed incident {incident.Id}. Old status={oldStatus}. New status={incident.Status}.");
 
         return MapToDto(incident);
     }
