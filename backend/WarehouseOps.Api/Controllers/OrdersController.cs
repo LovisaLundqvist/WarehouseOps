@@ -79,6 +79,10 @@ public class OrdersController : ControllerBase
 
             return Ok(order);
         }
+        catch (InventoryConcurrencyException exception)
+        {
+            return Conflict(exception.Message);
+        }
         catch (ArgumentException exception)
         {
             return BadRequest(exception.Message);

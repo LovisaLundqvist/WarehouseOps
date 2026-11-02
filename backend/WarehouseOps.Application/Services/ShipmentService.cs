@@ -53,6 +53,11 @@ public class ShipmentService : IShipmentService
             throw new InvalidOperationException("A shipment cannot be created for a cancelled order.");
         }
 
+        if (order.Status != OrderStatus.Packed)
+        {
+            throw new InvalidOperationException("An order must be packed before a shipment can be created.");
+        }
+
         var shipmentExists = await _shipmentRepository.ShipmentExistsForOrderAsync(request.OrderId);
 
         if (shipmentExists)
@@ -106,21 +111,72 @@ public class ShipmentService : IShipmentService
             throw new InvalidOperationException($"Shipment status cannot be changed from {shipment.Status} to {newStatus}.");
         }
 
+        if (shipment.Order is null)
+        {
+            throw new InvalidOperationException("Shipment does not have a valid order.");
+        }
+
+        // Idempotent requests must not overwrite shipping or delivery timestamps.
+        if (shipment.Status == newStatus)
+        {
+            return MapToDto(shipment);
+        }
+
+        var order = shipment.Order;
+
+        if (order.Status == OrderStatus.Cancelled)
+        {
+            throw new InvalidOperationException("A cancelled order cannot have an active shipment.");
+        }
+
+        // A delayed shipment can be cancelled only if it has never been shipped.
+        if (newStatus == ShipmentStatus.Cancelled && shipment.ShippedDate.HasValue)
+        {
+            throw new InvalidOperationException("A shipped shipment cannot be cancelled.");
+        }
+
+        if ((newStatus is ShipmentStatus.Packed or ShipmentStatus.Cancelled) &&
+            order.Status != OrderStatus.Packed)
+        {
+            throw new InvalidOperationException(
+                "A shipment can only be packed or cancelled while its order is packed.");
+        }
+
+        if (newStatus == ShipmentStatus.Shipped &&
+            order.Status is not (OrderStatus.Packed or OrderStatus.Shipped))
+        {
+            throw new InvalidOperationException("Order must be packed or shipped before shipping its shipment.");
+        }
+
+        if (newStatus == ShipmentStatus.Delivered &&
+            order.Status is not (OrderStatus.Shipped or OrderStatus.Packed))
+        {
+            throw new InvalidOperationException("Shipment cannot be delivered for an order that is not ready for delivery.");
+        }
+
         var oldStatus = shipment.Status;
+        var oldOrderStatus = order.Status;
+        var now = DateTime.UtcNow;
 
         shipment.Status = newStatus;
-        shipment.UpdatedAt = DateTime.UtcNow;
+        shipment.UpdatedAt = now;
 
         if (newStatus == ShipmentStatus.Shipped)
         {
-            shipment.ShippedDate = DateTime.UtcNow;
+            shipment.ShippedDate ??= now;
+            order.Status = OrderStatus.Shipped;
+            order.UpdatedAt = now;
         }
 
         if (newStatus == ShipmentStatus.Delivered)
         {
-            shipment.DeliveredDate = DateTime.UtcNow;
+            shipment.DeliveredDate = now;
+            order.Status = OrderStatus.Completed;
+            order.UpdatedAt = now;
         }
 
+        // Shipment and order changes are tracked in the same EF Core DbContext.
+        // TransactionalShipmentService includes the audit entries in one transaction.
         await _shipmentRepository.SaveChangesAsync();
 
         await _auditLogService.LogAsync(
@@ -128,6 +184,15 @@ public class ShipmentService : IShipmentService
             "Updated",
             "System",
             $"Updated shipment {shipment.Id} status from {oldStatus} to {shipment.Status}.");
+
+        if (oldOrderStatus != order.Status)
+        {
+            await _auditLogService.LogAsync(
+                "Order",
+                "Updated",
+                "System",
+                $"Updated order {order.Id} status from {oldOrderStatus} to {order.Status} after shipment {shipment.Id} status changed.");
+        }
 
         return MapToDto(shipment);
     }

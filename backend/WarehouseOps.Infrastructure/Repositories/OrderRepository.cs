@@ -51,6 +51,12 @@ public class OrderRepository : IOrderRepository
             .FirstOrDefaultAsync(inventoryItem => inventoryItem.ProductId == productId);
     }
 
+    public async Task<Shipment?> GetShipmentByOrderIdAsync(Guid orderId)
+    {
+        return await _context.Shipments
+            .FirstOrDefaultAsync(shipment => shipment.OrderId == orderId);
+    }
+
     public async Task AddAsync(Order order)
     {
         await _context.Orders.AddAsync(order);

@@ -164,6 +164,35 @@ public class OrderService : IOrderService
             throw new InvalidOperationException($"Order status cannot be changed from {order.Status} to {newStatus}.");
         }
 
+        // A cancellation must always restore reserved inventory, regardless
+        // of whether it is requested via /status or /cancel.
+        if (newStatus == OrderStatus.Cancelled)
+        {
+            return await CancelOrderAsync(order);
+        }
+
+        // A shipment is the source of truth for shipping and delivery progress.
+        // Manual order changes must not get ahead of the corresponding shipment.
+        if (newStatus is OrderStatus.Shipped or OrderStatus.Completed)
+        {
+            var shipment = await _orderRepository.GetShipmentByOrderIdAsync(order.Id);
+
+            if (newStatus == OrderStatus.Shipped &&
+                (shipment is null ||
+                 (shipment.Status != ShipmentStatus.Shipped &&
+                  !(shipment.Status == ShipmentStatus.Delayed && shipment.ShippedDate.HasValue))))
+            {
+                throw new InvalidOperationException(
+                    "Order cannot be marked as shipped before its shipment is shipped.");
+            }
+
+            if (newStatus == OrderStatus.Completed && shipment?.Status != ShipmentStatus.Delivered)
+            {
+                throw new InvalidOperationException(
+                    "Order cannot be completed before its shipment is delivered.");
+            }
+        }
+
         var oldStatus = order.Status;
 
         order.Status = newStatus;
@@ -194,24 +223,58 @@ public class OrderService : IOrderService
             throw new InvalidOperationException("Shipped or completed orders cannot be cancelled.");
         }
 
+        return await CancelOrderAsync(order);
+    }
+
+    private async Task<OrderDto> CancelOrderAsync(Order order)
+    {
+        // Repeated cancellations must not restore the same units twice.
         if (order.Status == OrderStatus.Cancelled)
         {
             return MapToDto(order);
         }
 
+        // A shipment must be cancelled first. Never restore stock that might
+        // already be on its way to the customer.
+        var shipment = await _orderRepository.GetShipmentByOrderIdAsync(order.Id);
+        if (shipment is not null && shipment.Status != ShipmentStatus.Cancelled)
+        {
+            throw new InvalidOperationException(
+                "Cancel the active shipment before cancelling its order.");
+        }
+
+        // Validate all inventory rows before changing tracked values.
+        // Missing rows must not lead to a partially restored order.
+        var returnedItems = new List<(InventoryItem Inventory, int Quantity)>();
+
         foreach (var orderItem in order.OrderItems)
         {
-            var inventoryItem = await _orderRepository.GetInventoryByProductIdAsync(orderItem.ProductId);
+            var inventory = await _orderRepository.GetInventoryByProductIdAsync(orderItem.ProductId);
 
-            if (inventoryItem is not null)
+            if (inventory is null)
             {
-                inventoryItem.QuantityInStock += orderItem.Quantity;
-                inventoryItem.UpdatedAt = DateTime.UtcNow;
+                throw new InvalidOperationException(
+                    $"Cannot cancel order because inventory for product {orderItem.ProductId} is missing.");
             }
+
+            if (orderItem.Quantity <= 0 ||
+                inventory.QuantityInStock > int.MaxValue - orderItem.Quantity)
+            {
+                throw new InvalidOperationException("Cannot restore an invalid inventory quantity.");
+            }
+
+            returnedItems.Add((inventory, orderItem.Quantity));
+        }
+
+        var now = DateTime.UtcNow;
+        foreach (var (inventory, quantity) in returnedItems)
+        {
+            inventory.QuantityInStock += quantity;
+            inventory.UpdatedAt = now;
         }
 
         order.Status = OrderStatus.Cancelled;
-        order.UpdatedAt = DateTime.UtcNow;
+        order.UpdatedAt = now;
 
         await _orderRepository.SaveChangesAsync();
 
@@ -219,7 +282,7 @@ public class OrderService : IOrderService
             "Order",
             "Cancelled",
             "System",
-            $"Cancelled order {order.Id} and returned {order.OrderItems.Sum(orderItem => orderItem.Quantity)} item(s) to inventory.");
+            $"Cancelled order {order.Id} and returned {order.OrderItems.Sum(orderItem => (long)orderItem.Quantity)} item(s) to inventory.");
 
         return MapToDto(order);
     }

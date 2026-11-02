@@ -14,6 +14,8 @@ public interface IOrderRepository
 
     Task<InventoryItem?> GetInventoryByProductIdAsync(Guid productId);
 
+    Task<Shipment?> GetShipmentByOrderIdAsync(Guid orderId);
+
     Task AddAsync(Order order);
 
     Task SaveChangesAsync();
