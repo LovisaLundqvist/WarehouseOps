@@ -135,6 +135,25 @@ public class ShipmentService : IShipmentService
             throw new InvalidOperationException("A shipped shipment cannot be cancelled.");
         }
 
+        // A delay before dispatch invalidates the prior packing confirmation.
+        // Operators must confirm Packed again before dispatching. ShippedDate
+        // distinguishes an in-transit delay from a pre-dispatch delay without
+        // adding a new persistence field or guessing the previous status.
+        if (shipment.Status == ShipmentStatus.Delayed)
+        {
+            if (!shipment.ShippedDate.HasValue && newStatus == ShipmentStatus.Shipped)
+            {
+                throw new InvalidOperationException(
+                    "A shipment delayed before dispatch must be packed again before shipping.");
+            }
+
+            if (shipment.ShippedDate.HasValue && newStatus == ShipmentStatus.Packed)
+            {
+                throw new InvalidOperationException(
+                    "A shipment delayed in transit cannot be packed again.");
+            }
+        }
+
         if ((newStatus is ShipmentStatus.Packed or ShipmentStatus.Cancelled) &&
             order.Status != OrderStatus.Packed)
         {
@@ -251,7 +270,7 @@ public class ShipmentService : IShipmentService
             ShipmentStatus.Pending => newStatus == ShipmentStatus.Packed || newStatus == ShipmentStatus.Cancelled || newStatus == ShipmentStatus.Delayed,
             ShipmentStatus.Packed => newStatus == ShipmentStatus.Shipped || newStatus == ShipmentStatus.Cancelled || newStatus == ShipmentStatus.Delayed,
             ShipmentStatus.Shipped => newStatus == ShipmentStatus.Delivered || newStatus == ShipmentStatus.Delayed,
-            ShipmentStatus.Delayed => newStatus == ShipmentStatus.Shipped || newStatus == ShipmentStatus.Cancelled,
+            ShipmentStatus.Delayed => newStatus == ShipmentStatus.Packed || newStatus == ShipmentStatus.Shipped || newStatus == ShipmentStatus.Cancelled,
             ShipmentStatus.Delivered => false,
             ShipmentStatus.Cancelled => false,
             _ => false

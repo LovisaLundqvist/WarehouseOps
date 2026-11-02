@@ -71,7 +71,7 @@ export function getShipmentWorkflow(shipment: Shipment): WorkflowAction[] {
       return shipment.shippedDate
         ? [{ status: "Shipped", label: "Resume transit", description: "Return the shipment to in-transit status." }]
         : [
-            { status: "Shipped", label: "Dispatch shipment", description: "Dispatch after the delay." },
+            { status: "Packed", label: "Confirm packing after delay", description: "Reconfirm packing before the shipment can be dispatched." },
             { status: "Cancelled", label: "Cancel shipment", description: "Only possible before dispatch." },
           ];
     default:
